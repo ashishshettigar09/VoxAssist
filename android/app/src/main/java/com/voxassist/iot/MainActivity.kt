@@ -6,14 +6,15 @@ import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.telephony.SmsManager
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
@@ -24,13 +25,17 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.URLEncoder
 import java.util.*
 
 /**
  * VoxAssist Android Companion App
- * Hosts full interactive accessibility UI in WebView,
- * handles background Bluetooth LE communication with FRDM-RW612 + INMP441,
- * and executes real carrier SMS via Android SmsManager.
+ * - Dispatches messages to contacts via WhatsApp (100% Free, zero carrier SMS costs)
+ * - Synchronizes real phonebook contacts into the voice assistant
+ * - Receives BLE voice triggers/audio from FRDM-RW612 + INMP441
+ * - Provides spoken accessibility feedback via TextToSpeech
  */
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
@@ -50,10 +55,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Initialize TextToSpeech engine for auditory feedback
+        // Initialize TextToSpeech engine
         tts = TextToSpeech(this, this)
 
-        // Setup WebView to render full tactile UI
+        // Setup WebView for tactile accessibility UI
         initWebView()
 
         checkAndRequestPermissions()
@@ -65,10 +70,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun initWebView() {
         webView = findViewById(R.id.webView)
         webView?.apply {
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    syncContactsToWebView()
+                }
+            }
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest?) {
-                    // Auto-grant microphone and media permissions inside WebView
                     request?.grant(request.resources)
                 }
             }
@@ -85,13 +94,66 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    // Bridge between Web UI and native Android SMS / Hardware
+    // Sync real device contacts into WebView
+    fun syncContactsToWebView() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+            val json = getDeviceContactsJson()
+            runOnUiThread {
+                webView?.evaluateJavascript("if (window.loadDeviceContacts) { window.loadDeviceContacts($json); }", null)
+            }
+        }
+    }
+
+    // Read real contacts from phone
+    fun getDeviceContactsJson(): String {
+        val list = JSONArray()
+        try {
+            val cursor = contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER
+                ),
+                null, null,
+                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC"
+            )
+            cursor?.use {
+                val nameIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val seen = HashSet<String>()
+                while (it.moveToNext()) {
+                    val name = it.getString(nameIdx) ?: continue
+                    val rawNum = it.getString(numIdx) ?: continue
+                    val cleanNum = rawNum.replace("[^0-9+]".toRegex(), "")
+                    if (cleanNum.isNotEmpty() && !seen.contains(name.lowercase())) {
+                        seen.add(name.lowercase())
+                        val obj = JSONObject()
+                        obj.put("id", list.length() + 1)
+                        obj.put("name", name)
+                        obj.put("phone", cleanNum)
+                        obj.put("relation", "Phone Contact")
+                        list.put(obj)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching contacts", e)
+        }
+        return list.toString()
+    }
+
+    // Bridge between Web UI and Native WhatsApp & Hardware
     inner class AndroidBridge {
         @JavascriptInterface
-        fun sendNativeSms(phoneNumber: String, message: String, contactName: String) {
+        fun sendWhatsApp(phoneNumber: String, message: String, contactName: String) {
             runOnUiThread {
-                sendSms(phoneNumber, message, contactName)
+                sendWhatsAppMessage(phoneNumber, message, contactName)
             }
+        }
+
+        @JavascriptInterface
+        fun getDeviceContactsJson(): String {
+            return this@MainActivity.getDeviceContactsJson()
         }
 
         @JavascriptInterface
@@ -105,7 +167,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale.US
-            speak("VoxAssist is active and connected to your voice assistant.")
+            speak("VoxAssist WhatsApp gateway is ready.")
         }
     }
 
@@ -116,7 +178,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun checkAndRequestPermissions() {
         val permissions = arrayOf(
             Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.SEND_SMS,
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.BLUETOOTH_SCAN,
             Manifest.permission.BLUETOOTH_CONNECT,
@@ -132,89 +193,56 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    // =========================================================================
-    // Speech Recognition
-    // =========================================================================
-    private fun initSpeechRecognizer() {
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {
-                    speak("Listening. Speak your message command.")
-                }
-                override fun onResults(results: Bundle?) {
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        val spokenText = matches[0]
-                        Log.d(TAG, "Recognized: $spokenText")
-                        processVoiceCommand(spokenText)
-                    }
-                }
-                override fun onError(error: Int) {
-                    speak("Voice not recognized. Please try again.")
-                }
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-                override fun onPartialResults(partialResults: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 101) {
+            syncContactsToWebView()
         }
     }
 
     // =========================================================================
-    // Command Parser & Contact Resolution
+    // WhatsApp Message Dispatcher (Replaces SMS - Zero Carrier Charges)
     // =========================================================================
-    private fun processVoiceCommand(voiceText: String) {
-        val regex = Regex("(?i)send\\s+(?:a\\s+)?message\\s+to\\s+([^-:]+?)\\s*[-:]\\s*(.+)")
-        val match = regex.find(voiceText)
-
-        if (match != null) {
-            val contactName = match.groupValues[1].trim()
-            val messageBody = match.groupValues[2].trim()
-
-            val phoneNumber = queryPhoneNumberByName(contactName)
-
-            if (phoneNumber != null) {
-                speak("Sending message to $contactName: $messageBody")
-                sendSms(phoneNumber, messageBody, contactName)
-            } else {
-                speak("Could not find $contactName in your phone contacts.")
-            }
-        } else {
-            speak("Command format not recognized. Please say: Send message to Name, dash, message.")
-        }
-    }
-
-    private fun queryPhoneNumberByName(name: String): String? {
-        val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
-        val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
-        val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
-        val selectionArgs = arrayOf("%$name%")
-
-        contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                if (numberIndex >= 0) {
-                    return cursor.getString(numberIndex)
-                }
-            }
-        }
-        return null
-    }
-
-    // Send Carrier SMS
-    @SuppressLint("MissingPermission")
-    private fun sendSms(phoneNumber: String, message: String, contactName: String) {
+    private fun sendWhatsAppMessage(phoneNumber: String, message: String, contactName: String) {
         try {
-            val smsManager: SmsManager = getSystemService(SmsManager::class.java)
-            smsManager.sendTextMessage(phoneNumber, null, message, null, null)
-            speak("Message sent successfully to $contactName.")
-            Toast.makeText(this, "SMS Sent to $contactName ($phoneNumber)", Toast.LENGTH_LONG).show()
+            // Normalize phone number (strip non-numeric characters)
+            var cleanNumber = phoneNumber.replace("[^0-9+]".toRegex(), "")
+            if (cleanNumber.startsWith("+")) {
+                cleanNumber = cleanNumber.substring(1)
+            } else if (cleanNumber.length == 10) {
+                // If standard 10-digit Indian number, prepend India country code 91
+                cleanNumber = "91$cleanNumber"
+            }
+
+            val encodedMessage = URLEncoder.encode(message, "UTF-8")
+            val whatsappUrl = "https://api.whatsapp.com/send?phone=$cleanNumber&text=$encodedMessage"
+
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(whatsappUrl)).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                val pm = packageManager
+                if (isPackageInstalled("com.whatsapp", pm)) {
+                    setPackage("com.whatsapp")
+                } else if (isPackageInstalled("com.whatsapp.w4b", pm)) {
+                    setPackage("com.whatsapp.w4b") // WhatsApp Business
+                }
+            }
+
+            startActivity(intent)
+            speak("Opening WhatsApp message to $contactName.")
+            Toast.makeText(this, "Opening WhatsApp for $contactName", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Log.e(TAG, "SMS failed", e)
-            speak("Failed to send text message. Please check signal or carrier permissions.")
+            Log.e(TAG, "WhatsApp dispatch error", e)
+            speak("WhatsApp could not be opened. Please make sure WhatsApp is installed.")
+            Toast.makeText(this, "WhatsApp is not installed on this device", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun isPackageInstalled(packageName: String, packageManager: PackageManager): Boolean {
+        return try {
+            packageManager.getPackageInfo(packageName, 0)
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
         }
     }
 
@@ -266,6 +294,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
             }
         })
+    }
+
+    private fun initSpeechRecognizer() {
+        if (SpeechRecognizer.isRecognitionAvailable(this)) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onResults(results: Bundle?) {}
+                override fun onError(error: Int) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+        }
     }
 
     override fun onDestroy() {

@@ -1,6 +1,6 @@
-# VoxAssist - Voice-to-SMS Assistive System for Blind Users
+# VoxAssist - Voice-to-WhatsApp Assistive System for Blind Users
 
-An end-to-end assistive IoT system designed for blind and visually impaired users. It captures voice commands through an **INMP441 digital MEMS microphone** connected to an **NXP FRDM-RW612** microcontroller, streams the command over **Bluetooth Low Energy (BLE)** to a companion smartphone app, automatically identifies the contact from the address book, sends a native carrier **SMS**, and gives **spoken audio feedback (Text-to-Speech)**.
+An end-to-end assistive IoT system designed for blind and visually impaired users. It captures voice commands through an **INMP441 digital MEMS microphone** connected to an **NXP FRDM-RW612** microcontroller, streams the command over **Bluetooth Low Energy (BLE)** to a companion smartphone app, automatically identifies the contact from the address book, opens the pre-filled chat via **WhatsApp** (100% Free, zero carrier SMS costs), and gives **spoken audio feedback (Text-to-Speech)**.
 
 ---
 
@@ -9,8 +9,8 @@ The user speaks the natural voice command:
 > **"Send message to [Contact Name] - [Message Body]"**
 
 * **Example 1:** *"Send message to Mom - I am outside the clinic, please pick me up"*
-* **Example 2:** *"Send message to Doctor Smith - Can we confirm my appointment for tomorrow at 3 PM"*
-* **Example 3:** *"Send message to Alex - I will reach the metro station in ten minutes"*
+* **Example 2:** *"Send message to Dad - Can you call me back when you are free"*
+* **Example 3:** *"Send message to Doctor - Can we confirm my appointment for tomorrow"*
 
 ---
 

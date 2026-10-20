@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Assistive Voice-to-SMS Companion for Blind Users - FRDM-RW612 & INMP441 Microcontroller Bluetooth Interface Simulator">
-  <title>VoxAssist - Voice to SMS Assistive Companion</title>
+  <meta name="description" content="Assistive Voice-to-WhatsApp Companion for Blind Users - FRDM-RW612 & INMP441 Microcontroller Bluetooth Interface">
+  <title>VoxAssist - Voice to WhatsApp Assistive Companion</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#4f46e5">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -28,7 +28,7 @@
         </div>
         <div>
           <h1>VoxAssist IoT</h1>
-          <p class="subtitle">Blind Assistive Voice-to-SMS Gateway (FRDM-RW612 + INMP441)</p>
+          <p class="subtitle">Blind Assistive Voice-to-WhatsApp Gateway (FRDM-RW612 + INMP441)</p>
         </div>
       </div>
 
@@ -156,17 +156,17 @@
               <span class="preset-contact">Mom:</span>
               <span class="preset-msg">"I am outside the clinic..."</span>
             </button>
-            <button class="preset-btn" data-command="Send message to Doctor Smith - Can we confirm my appointment for tomorrow at 3 PM">
-              <span class="preset-contact">Doctor Smith:</span>
-              <span class="preset-msg">"Can we confirm my appointment..."</span>
+            <button class="preset-btn" data-command="Send message to Dad - Can you call me back when you are free">
+              <span class="preset-contact">Dad:</span>
+              <span class="preset-msg">"Can you call me back..."</span>
+            </button>
+            <button class="preset-btn" data-command="Send message to Doctor - Can we confirm my appointment for tomorrow">
+              <span class="preset-contact">Doctor:</span>
+              <span class="preset-msg">"Can we confirm appointment..."</span>
             </button>
             <button class="preset-btn" data-command="Send message to Alex - I will reach the metro station in ten minutes">
               <span class="preset-contact">Alex:</span>
               <span class="preset-msg">"I will reach the metro station..."</span>
-            </button>
-            <button class="preset-btn alert-preset" data-command="Send message to Emergency Services - Need immediate assistance at main gate">
-              <span class="preset-contact">Emergency:</span>
-              <span class="preset-msg">"Need immediate assistance..."</span>
             </button>
           </div>
         </div>
@@ -238,13 +238,13 @@
           <div class="panel-header">
             <div class="panel-title-wrap">
               <span class="panel-badge emerald">DISPATCH OUTBOX</span>
-              <h2>Carrier SMS History</h2>
+              <h2>WhatsApp Message History</h2>
             </div>
             <button class="clear-btn" id="clearOutboxBtn">Clear</button>
           </div>
 
           <div class="outbox-list" id="outboxList">
-            <p class="empty-state">No messages dispatched yet. Trigger a voice command above.</p>
+            <p class="empty-state">No WhatsApp messages dispatched yet. Trigger a voice command above.</p>
           </div>
         </div>
       </section>
@@ -263,8 +263,8 @@
             <input type="text" id="newContactName" placeholder="e.g. Sister, John, Caregiver" required>
           </div>
           <div class="form-group">
-            <label for="newContactPhone">Mobile Phone Number</label>
-            <input type="tel" id="newContactPhone" placeholder="+1 (555) 000-0000" required>
+            <label for="newContactPhone">Mobile Phone Number (WhatsApp)</label>
+            <input type="tel" id="newContactPhone" placeholder="e.g. 9876543210 or +919876543210" required>
           </div>
           <div class="form-group">
             <label for="newContactRelation">Relationship / Note</label>
