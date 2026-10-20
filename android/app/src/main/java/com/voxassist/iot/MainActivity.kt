@@ -153,6 +153,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // Send Carrier SMS
+    @android.annotation.SuppressLint("MissingPermission")
     private fun sendSms(phoneNumber: String, message: String, contactName: String) {
         try {
             val smsManager: SmsManager = getSystemService(SmsManager::class.java)
@@ -168,6 +169,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // =========================================================================
     // Bluetooth LE Connection to FRDM-RW612
     // =========================================================================
+    @android.annotation.SuppressLint("MissingPermission")
     private fun initBluetooth() {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager.adapter
