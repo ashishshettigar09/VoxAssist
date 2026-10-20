@@ -228,6 +228,29 @@
             <button class="add-contact-btn" id="openAddContactBtn">+ Add Contact</button>
           </div>
 
+          <!-- Contacts Search Bar -->
+          <div class="contacts-search-box">
+            <div class="search-input-wrapper">
+              <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input type="text" id="contactSearchInput" placeholder="Search contacts by name, relation, or number..." aria-label="Search contacts">
+              <button id="clearSearchBtn" class="clear-search-btn" title="Clear search" hidden>&times;</button>
+            </div>
+            <span class="contacts-count" id="contactsCountBadge">5 contacts</span>
+          </div>
+
+          <!-- Hands-Free WhatsApp Auto-Send Banner -->
+          <div class="a11y-banner" id="a11yBanner">
+            <div class="a11y-icon">⚡</div>
+            <div class="a11y-text">
+              <strong>Hands-Free Auto-Send:</strong>
+              <span>Auto-clicks "Send" in WhatsApp without touching the screen.</span>
+            </div>
+            <button class="enable-a11y-btn" id="enableA11yBtn">Enable</button>
+          </div>
+
           <div class="contacts-list" id="contactsList">
             <!-- Dynamically populated via app.js -->
           </div>

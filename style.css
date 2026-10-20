@@ -831,6 +831,116 @@ body {
   background: rgba(168, 85, 247, 0.32);
 }
 
+/* Contacts Panel Search & Filter */
+.contacts-search-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+#contactSearchInput {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  padding: 8px 32px 8px 36px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  transition: var(--transition);
+}
+
+#contactSearchInput:focus {
+  border-color: var(--accent-purple);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.clear-search-btn:hover {
+  color: #fff;
+}
+
+.contacts-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Hands-Free Auto-Send Accessibility Banner */
+.a11y-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(37, 211, 102, 0.15), rgba(6, 182, 212, 0.12));
+  border: 1px solid rgba(37, 211, 102, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.a11y-banner[hidden] {
+  display: none !important;
+}
+
+.a11y-icon {
+  font-size: 1.1rem;
+}
+
+.a11y-text {
+  font-size: 0.74rem;
+  color: #e2e8f0;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.a11y-text strong {
+  color: #25D366;
+  display: block;
+}
+
+.enable-a11y-btn {
+  background: #25D366;
+  border: none;
+  color: #000;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+}
+
+.enable-a11y-btn:hover {
+  background: #20ba59;
+  transform: scale(1.04);
+}
+
 /* Contacts Panel */
 .contacts-list {
   display: flex;

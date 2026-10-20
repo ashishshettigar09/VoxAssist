@@ -14,6 +14,24 @@ The user speaks the natural voice command:
 
 ---
 
+## ⚡ Hands-Free WhatsApp Auto-Send (Zero Clicks Required)
+
+For blind and visually impaired users, touching the screen to tap "Send" in WhatsApp is inconvenient. VoxAssist solves this using an **Android Accessibility Service**:
+1. When you say: *"Send message to [Name] - [Message]"*, VoxAssist opens the chat and automatically clicks the **"Send"** button for you!
+2. It then automatically returns back to VoxAssist.
+3. **One-Time Setup:** On your phone, go to **Settings > Accessibility > Installed Apps > Turn VoxAssist ON**.
+
+---
+
+## 🔍 Instant Contact Search
+
+A real-time search bar is built into the Contacts panel:
+* Search by **Name** (e.g. "Mom", "Rahul", "Doctor")
+* Search by **Phone Number** (e.g. "9876", "+91")
+* Search by **Relationship/Category** (e.g. "Family", "Medical")
+
+---
+
 ## 📂 Repository Structure
 
 ```

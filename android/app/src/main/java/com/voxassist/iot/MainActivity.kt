@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -33,8 +34,8 @@ import java.util.*
 /**
  * VoxAssist Android Companion App
  * - Dispatches messages to contacts via WhatsApp (100% Free, zero carrier SMS costs)
+ * - Automatically clicks "Send" via WhatsAppAccessibilityService (Zero Clicks Required)
  * - Synchronizes real phonebook contacts into the voice assistant
- * - Receives BLE voice triggers/audio from FRDM-RW612 + INMP441
  * - Provides spoken accessibility feedback via TextToSpeech
  */
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     syncContactsToWebView()
+                    notifyAccessibilityStatus()
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -91,6 +93,29 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
             addJavascriptInterface(AndroidBridge(), "AndroidBridge")
             loadUrl("file:///android_asset/index.html")
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        notifyAccessibilityStatus()
+    }
+
+    private fun notifyAccessibilityStatus() {
+        val enabled = isAccessibilityServiceEnabled()
+        runOnUiThread {
+            webView?.evaluateJavascript("if (window.setAccessibilityStatus) { window.setAccessibilityStatus($enabled); }", null)
+        }
+    }
+
+    // Check if WhatsApp auto-send accessibility service is enabled
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        if (WhatsAppAccessibilityService.isServiceRunning) return true
+        return try {
+            val enabledServices = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+            enabledServices.contains(packageName)
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -157,6 +182,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         @JavascriptInterface
+        fun isAccessibilityEnabled(): Boolean {
+            return isAccessibilityServiceEnabled()
+        }
+
+        @JavascriptInterface
+        fun openAccessibilitySettings() {
+            runOnUiThread {
+                try {
+                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    startActivity(intent)
+                    speak("Please turn on VoxAssist in the accessibility services list.")
+                    Toast.makeText(this@MainActivity, "Turn on VoxAssist in Accessibility Settings", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to open accessibility settings", e)
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun speak(text: String) {
             runOnUiThread {
                 this@MainActivity.speak(text)
@@ -201,7 +247,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // =========================================================================
-    // WhatsApp Message Dispatcher (Replaces SMS - Zero Carrier Charges)
+    // WhatsApp Message Dispatcher (Automatic Send without User Tapping)
     // =========================================================================
     private fun sendWhatsAppMessage(phoneNumber: String, message: String, contactName: String) {
         try {
@@ -212,6 +258,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             } else if (cleanNumber.length == 10) {
                 // If standard 10-digit Indian number, prepend India country code 91
                 cleanNumber = "91$cleanNumber"
+            }
+
+            // Arm the Accessibility Service to automatically click Send when WhatsApp opens
+            if (isAccessibilityServiceEnabled()) {
+                WhatsAppAccessibilityService.autoSendPending = true
+                speak("Sending WhatsApp message to $contactName automatically.")
+            } else {
+                speak("Opening WhatsApp for $contactName. Enable Accessibility in app settings for automated sending.")
+                Toast.makeText(this, "Tip: Enable VoxAssist in Accessibility Settings for 100% hands-free sending", Toast.LENGTH_LONG).show()
             }
 
             val encodedMessage = URLEncoder.encode(message, "UTF-8")
@@ -228,8 +283,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
 
             startActivity(intent)
-            speak("Opening WhatsApp message to $contactName.")
-            Toast.makeText(this, "Opening WhatsApp for $contactName", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "WhatsApp dispatch error", e)
             speak("WhatsApp could not be opened. Please make sure WhatsApp is installed.")

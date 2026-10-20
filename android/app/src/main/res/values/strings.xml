@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">VoxAssist</string>
+    <string name="accessibility_description">Allows VoxAssist to automatically click the Send button in WhatsApp for hands-free voice messaging without requiring touch interaction.</string>
 </resources>

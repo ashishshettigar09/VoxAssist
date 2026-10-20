@@ -102,6 +102,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelModalBtn = document.getElementById('cancelModalBtn');
   const addContactForm = document.getElementById('addContactForm');
   const presetButtons = document.querySelectorAll('.preset-btn');
+  const contactSearchInput = document.getElementById('contactSearchInput');
+  const clearSearchBtn = document.getElementById('clearSearchBtn');
+  const contactsCountBadge = document.getElementById('contactsCountBadge');
+  const a11yBanner = document.getElementById('a11yBanner');
+  const enableA11yBtn = document.getElementById('enableA11yBtn');
 
   // =========================================================================
   // Web Audio & Sound Effects (Assistive Audio Feedback for Blind Users)
@@ -612,10 +617,23 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // =========================================================================
-  // Contact Directory Rendering
+  // Contact Directory Rendering & Filtering
   // =========================================================================
-  function renderContacts() {
-    contactsList.innerHTML = state.contacts.map(c => `
+  function renderContacts(listToRender = state.contacts) {
+    if (contactsCountBadge) {
+      if (listToRender.length === state.contacts.length) {
+        contactsCountBadge.textContent = `${state.contacts.length} contacts`;
+      } else {
+        contactsCountBadge.textContent = `Showing ${listToRender.length} of ${state.contacts.length}`;
+      }
+    }
+
+    if (listToRender.length === 0) {
+      contactsList.innerHTML = '<p class="empty-state">No contacts found matching your search.</p>';
+      return;
+    }
+
+    contactsList.innerHTML = listToRender.map(c => `
       <div class="contact-item" data-name="${escapeHtml(c.name)}" title="Tap to test WhatsApp command for ${escapeHtml(c.name)}">
         <div class="contact-info-wrap">
           <div class="contact-avatar">${c.name.charAt(0).toUpperCase()}</div>
@@ -637,6 +655,65 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   renderContacts();
+
+  // Search Filter Handler
+  if (contactSearchInput) {
+    contactSearchInput.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      if (clearSearchBtn) {
+        clearSearchBtn.hidden = !q;
+      }
+      if (!q) {
+        renderContacts(state.contacts);
+        return;
+      }
+      const filtered = state.contacts.filter(c => {
+        const nameMatch = c.name.toLowerCase().includes(q);
+        const phoneMatch = (c.phone || '').replace(/[^0-9]/g, '').includes(q.replace(/[^0-9]/g, ''));
+        const relationMatch = (c.relation || '').toLowerCase().includes(q);
+        return nameMatch || phoneMatch || relationMatch;
+      });
+      renderContacts(filtered);
+    });
+  }
+
+  if (clearSearchBtn) {
+    clearSearchBtn.addEventListener('click', () => {
+      contactSearchInput.value = '';
+      clearSearchBtn.hidden = true;
+      renderContacts(state.contacts);
+      contactSearchInput.focus();
+    });
+  }
+
+  // Accessibility Auto-Send Status Handler
+  window.setAccessibilityStatus = function(isEnabled) {
+    if (a11yBanner) {
+      if (isEnabled) {
+        a11yBanner.innerHTML = `
+          <div class="a11y-icon">✅</div>
+          <div class="a11y-text">
+            <strong>Hands-Free Auto-Send: Active</strong>
+            <span>WhatsApp messages are sent automatically without touching the screen.</span>
+          </div>
+        `;
+        a11yBanner.style.borderColor = 'rgba(37, 211, 102, 0.6)';
+        a11yBanner.style.background = 'rgba(37, 211, 102, 0.12)';
+      } else {
+        a11yBanner.hidden = false;
+      }
+    }
+  };
+
+  if (enableA11yBtn) {
+    enableA11yBtn.addEventListener('click', () => {
+      if (window.AndroidBridge && typeof window.AndroidBridge.openAccessibilitySettings === 'function') {
+        window.AndroidBridge.openAccessibilitySettings();
+      } else {
+        alert('To enable Hands-Free Auto-Send on your phone:\n\n1. Open Settings > Accessibility.\n2. Tap "Installed Apps" or "VoxAssist".\n3. Turn VoxAssist ON.\n\nNow messages will send automatically without tapping Send in WhatsApp!');
+      }
+    });
+  }
 
   // Add Contact Modal Handlers
   openAddContactBtn.addEventListener('click', () => {
