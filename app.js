@@ -464,6 +464,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Dispatch to Carrier Outbox
       addMessageToOutbox(resolvedContact, messageBody);
+
+      // Trigger Native Android SMS if running inside APK
+      if (window.AndroidBridge && typeof window.AndroidBridge.sendNativeSms === 'function') {
+        try {
+          window.AndroidBridge.sendNativeSms(resolvedContact.phone, messageBody, resolvedContact.name);
+        } catch (e) {
+          console.warn('AndroidBridge SMS dispatch error:', e);
+        }
+      }
     } else {
       // Contact not found in phone book
       intentStatusBadge.textContent = 'CONTACT NOT FOUND';

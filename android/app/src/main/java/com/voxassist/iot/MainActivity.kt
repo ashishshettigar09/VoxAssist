@@ -1,6 +1,7 @@
 package com.voxassist.iot
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
@@ -14,6 +15,11 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.telephony.SmsManager
 import android.util.Log
+import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -22,9 +28,9 @@ import java.util.*
 
 /**
  * VoxAssist Android Companion App
- * Receives BLE audio/trigger from FRDM-RW612 + INMP441,
- * parses recipient & message, resolves phone number, sends SMS,
- * and provides spoken audio feedback via TextToSpeech for blind users.
+ * Hosts full interactive accessibility UI in WebView,
+ * handles background Bluetooth LE communication with FRDM-RW612 + INMP441,
+ * and executes real carrier SMS via Android SmsManager.
  */
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
@@ -33,19 +39,67 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var speechRecognizer: SpeechRecognizer? = null
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var bluetoothGatt: BluetoothGatt? = null
+    private var webView: WebView? = null
 
     // Target GATT UUIDs for FRDM-RW612 EdgeFast BLE Service
     private val SERVICE_UUID = UUID.fromString("0000FFF0-0000-1000-8000-00805F9B34FB")
     private val CHAR_AUDIO_CMD_UUID = UUID.fromString("0000FFF1-0000-1000-8000-00805F9B34FB")
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
         // Initialize TextToSpeech engine for auditory feedback
         tts = TextToSpeech(this, this)
+
+        // Setup WebView to render full tactile UI
+        initWebView()
 
         checkAndRequestPermissions()
         initSpeechRecognizer()
         initBluetooth()
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun initWebView() {
+        webView = findViewById(R.id.webView)
+        webView?.apply {
+            webViewClient = WebViewClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onPermissionRequest(request: PermissionRequest?) {
+                    // Auto-grant microphone and media permissions inside WebView
+                    request?.grant(request.resources)
+                }
+            }
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                allowFileAccess = true
+                allowContentAccess = true
+                mediaPlaybackRequiresUserGesture = false
+                databaseEnabled = true
+            }
+            addJavascriptInterface(AndroidBridge(), "AndroidBridge")
+            loadUrl("file:///android_asset/index.html")
+        }
+    }
+
+    // Bridge between Web UI and native Android SMS / Hardware
+    inner class AndroidBridge {
+        @JavascriptInterface
+        fun sendNativeSms(phoneNumber: String, message: String, contactName: String) {
+            runOnUiThread {
+                sendSms(phoneNumber, message, contactName)
+            }
+        }
+
+        @JavascriptInterface
+        fun speak(text: String) {
+            runOnUiThread {
+                this@MainActivity.speak(text)
+            }
+        }
     }
 
     override fun onInit(status: Int) {
@@ -111,7 +165,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // =========================================================================
     // Command Parser & Contact Resolution
-    // Pattern: "Send message to <Name> - <Message>"
     // =========================================================================
     private fun processVoiceCommand(voiceText: String) {
         val regex = Regex("(?i)send\\s+(?:a\\s+)?message\\s+to\\s+([^-:]+?)\\s*[-:]\\s*(.+)")
@@ -134,7 +187,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    // Lookup phone number from Android native contacts database
     private fun queryPhoneNumberByName(name: String): String? {
         val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
         val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
@@ -153,7 +205,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // Send Carrier SMS
-    @android.annotation.SuppressLint("MissingPermission")
+    @SuppressLint("MissingPermission")
     private fun sendSms(phoneNumber: String, message: String, contactName: String) {
         try {
             val smsManager: SmsManager = getSystemService(SmsManager::class.java)
@@ -169,7 +221,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // =========================================================================
     // Bluetooth LE Connection to FRDM-RW612
     // =========================================================================
-    @android.annotation.SuppressLint("MissingPermission")
+    @SuppressLint("MissingPermission")
     private fun initBluetooth() {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager.adapter
@@ -186,6 +238,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         })
     }
 
+    @SuppressLint("MissingPermission")
     private fun connectToDevice(device: BluetoothDevice) {
         bluetoothGatt = device.connectGatt(this, false, object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
@@ -204,9 +257,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
 
             override fun onCharacteristicChanged(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
-                // Microcontroller triggered Push-to-Talk or sent audio chunk
                 runOnUiThread {
-                    // Trigger the speech recognition
                     val intent = android.content.Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
