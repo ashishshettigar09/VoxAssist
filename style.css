@@ -742,6 +742,254 @@ body {
   font-weight: 500;
 }
 
+/* ==========================================================================
+   Microcontroller Real-Time BLE Buffer Engine Card
+   ========================================================================== */
+.mcu-buffer-card {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85));
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.mcu-buffer-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #06b6d4, #25D366, #6366f1);
+}
+
+.buffer-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.buffer-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.buffer-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #06b6d4;
+  box-shadow: 0 0 8px #06b6d4;
+  animation: pulseBufferDot 1.5s infinite;
+}
+
+@keyframes pulseBufferDot {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 12px #06b6d4; }
+  100% { transform: scale(0.9); opacity: 0.7; }
+}
+
+.buffer-card-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #38bdf8;
+  font-family: var(--font-mono);
+}
+
+.buffer-status-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+  transition: var(--transition);
+}
+
+.buffer-status-badge.idle {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.buffer-status-badge.recording {
+  background: rgba(244, 63, 94, 0.25);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.5);
+  animation: pulseRecordingBadge 0.8s infinite alternate;
+}
+
+@keyframes pulseRecordingBadge {
+  0% { box-shadow: 0 0 4px rgba(244, 63, 94, 0.3); }
+  100% { box-shadow: 0 0 14px rgba(244, 63, 94, 0.8); }
+}
+
+.buffer-status-badge.buffering {
+  background: rgba(6, 182, 212, 0.25);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.5);
+}
+
+.buffer-status-badge.ready {
+  background: rgba(16, 185, 129, 0.25);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.5);
+}
+
+.buffer-status-badge.sent {
+  background: rgba(37, 211, 102, 0.25);
+  color: #25D366;
+  border: 1px solid rgba(37, 211, 102, 0.5);
+}
+
+/* Buffer Statistics Grid */
+.buffer-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .buffer-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.buf-metric {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.buf-metric-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.buf-metric-val {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.buf-metric-val.highlight {
+  color: #25D366;
+}
+
+/* Progress Fill Bar */
+.buffer-progress-wrap {
+  width: 100%;
+  height: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.buffer-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #06b6d4, #25D366);
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+}
+
+/* Payload Preview Box */
+.buffer-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.buf-preview-label {
+  font-size: 0.64rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.buffer-preview-box {
+  background: #050811;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: #a5f3fc;
+  min-height: 42px;
+  max-height: 64px;
+  overflow-y: auto;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+/* Buffer Action Buttons */
+.buffer-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.buf-btn {
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: var(--transition);
+  border: none;
+}
+
+.buf-btn.test-btn {
+  background: rgba(6, 182, 212, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+}
+
+.buf-btn.test-btn:hover {
+  background: rgba(6, 182, 212, 0.35);
+  transform: translateY(-1px);
+}
+
+.buf-btn.flush-btn {
+  background: rgba(37, 211, 102, 0.2);
+  color: #25D366;
+  border: 1px solid rgba(37, 211, 102, 0.4);
+}
+
+.buf-btn.flush-btn:hover {
+  background: rgba(37, 211, 102, 0.35);
+  transform: translateY(-1px);
+}
+
+.buf-btn.clear-btn-sm {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid var(--border-subtle);
+}
+
+.buf-btn.clear-btn-sm:hover {
+  background: rgba(148, 163, 184, 0.25);
+  color: #fff;
+}
+
 /* BLE Packet Terminal */
 .ble-terminal-wrap {
   display: flex;
@@ -891,6 +1139,67 @@ body {
   font-family: var(--font-mono);
 }
 
+.contacts-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.search-hint {
+  font-size: 0.7rem;
+  color: #818cf8;
+  font-weight: 500;
+}
+
+/* Contacts Category Filter Chips */
+.contact-filter-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0 4px 0;
+  scrollbar-width: none;
+}
+
+.contact-filter-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+  font-family: inherit;
+}
+
+.filter-chip:hover {
+  background: var(--bg-surface);
+  color: #fff;
+  border-color: var(--border-medium);
+}
+
+.filter-chip.active {
+  background: rgba(168, 85, 247, 0.25);
+  border-color: var(--accent-purple);
+  color: #e9d5ff;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
+}
+
+/* Matching Text Highlight */
+.match-highlight {
+  background: rgba(250, 204, 21, 0.35);
+  color: #fef08a;
+  border-radius: 2px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+
 /* Hands-Free Auto-Send Accessibility Banner */
 .a11y-banner {
   display: flex;
@@ -946,7 +1255,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 220px;
+  max-height: 230px;
   overflow-y: auto;
 }
 
@@ -954,7 +1263,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 9px 12px;
   background: rgba(15, 23, 42, 0.7);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -971,7 +1280,9 @@ body {
 .contact-info-wrap {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
 .contact-avatar {
@@ -985,31 +1296,63 @@ body {
   font-weight: 700;
   font-size: 0.8rem;
   color: #fff;
+  flex-shrink: 0;
 }
 
 .contact-meta {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .contact-name {
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   font-weight: 600;
   color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .contact-phone {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-family: var(--font-mono);
   color: var(--text-muted);
 }
 
+.contact-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.contact-action-btn {
+  background: rgba(37, 211, 102, 0.15);
+  border: 1px solid rgba(37, 211, 102, 0.35);
+  color: #25D366;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: inherit;
+}
+
+.contact-action-btn:hover {
+  background: rgba(37, 211, 102, 0.3);
+  color: #fff;
+  transform: scale(1.05);
+}
+
 .contact-relation {
-  font-size: 0.72rem;
-  padding: 2px 8px;
+  font-size: 0.68rem;
+  padding: 2px 7px;
   border-radius: var(--radius-full);
   background: rgba(148, 163, 184, 0.1);
   color: var(--text-secondary);
+  font-weight: 500;
 }
 
 /* Outbox / Sent SMS History */

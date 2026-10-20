@@ -203,6 +203,61 @@
             </div>
           </div>
 
+          <!-- Microcontroller Real-Time BLE Buffer Engine Monitor -->
+          <div class="mcu-buffer-card" id="mcuBufferCard">
+            <div class="buffer-card-header">
+              <div class="buffer-title-wrap">
+                <span class="buffer-pulse-dot" id="bufferPulseDot"></span>
+                <span class="buffer-card-title">BLE DATA BUFFER ENGINE (MCU &rarr; PHONE)</span>
+              </div>
+              <span class="buffer-status-badge idle" id="bufferStatusBadge">BUFFER IDLE</span>
+            </div>
+
+            <!-- Buffer Statistics Grid -->
+            <div class="buffer-metrics-grid">
+              <div class="buf-metric">
+                <span class="buf-metric-label">PACKETS</span>
+                <span class="buf-metric-val" id="bufPacketCount">0 pkts</span>
+              </div>
+              <div class="buf-metric">
+                <span class="buf-metric-label">BUFFER SIZE</span>
+                <span class="buf-metric-val" id="bufByteCount">0 KB</span>
+              </div>
+              <div class="buf-metric">
+                <span class="buf-metric-label">BLE STATE</span>
+                <span class="buf-metric-val highlight" id="bleStateLabel">Connected</span>
+              </div>
+              <div class="buf-metric">
+                <span class="buf-metric-label">GATT RSSI</span>
+                <span class="buf-metric-val" id="bleRssiLabel">-52 dBm</span>
+              </div>
+            </div>
+
+            <!-- Buffer Fill Level Bar -->
+            <div class="buffer-progress-wrap">
+              <div class="buffer-progress-bar" id="bufferProgressBar" style="width: 0%;"></div>
+            </div>
+
+            <!-- Live Payload Preview -->
+            <div class="buffer-preview-wrap">
+              <span class="buf-preview-label">ACCUMULATED BUFFER PAYLOAD (PCM / TEXT):</span>
+              <div class="buffer-preview-box" id="bufferPreviewBox">Buffer is empty. Waiting for PTT trigger...</div>
+            </div>
+
+            <!-- Buffer Simulation & Test Actions -->
+            <div class="buffer-actions-row">
+              <button class="buf-btn test-btn" id="simulateBlePttBtn" title="Simulate Microcontroller PTT Press, Stream, and Release">
+                <span>⚡ Test MCU Buffer Stream</span>
+              </button>
+              <button class="buf-btn flush-btn" id="flushBufferBtn" title="Immediately process and send buffered command">
+                <span>🚀 Flush & Send</span>
+              </button>
+              <button class="buf-btn clear-btn-sm" id="clearBufferBtn" title="Reset buffer memory">
+                <span>Clear</span>
+              </button>
+            </div>
+          </div>
+
           <!-- BLE Live Packet Stream Terminal -->
           <div class="ble-terminal-wrap">
             <div class="terminal-header">
@@ -235,10 +290,22 @@
                 <circle cx="11" cy="11" r="8"/>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input type="text" id="contactSearchInput" placeholder="Search contacts by name, relation, or number..." aria-label="Search contacts">
+              <input type="text" id="contactSearchInput" placeholder="Search name, phone, or relation (e.g. Alex, Mom)..." aria-label="Search contacts">
               <button id="clearSearchBtn" class="clear-search-btn" title="Clear search" hidden>&times;</button>
             </div>
-            <span class="contacts-count" id="contactsCountBadge">5 contacts</span>
+            <div class="contacts-meta-row">
+              <span class="contacts-count" id="contactsCountBadge">5 contacts</span>
+              <span class="search-hint">💡 Tap contact to auto-send</span>
+            </div>
+          </div>
+
+          <!-- Contacts Category Filter Chips -->
+          <div class="contact-filter-chips" id="contactFilterChips">
+            <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="Family">Family</button>
+            <button class="filter-chip" data-filter="Medical">Medical</button>
+            <button class="filter-chip" data-filter="Friend">Friends</button>
+            <button class="filter-chip" data-filter="Caregiver">Caregiver</button>
           </div>
 
           <!-- Hands-Free WhatsApp Auto-Send Banner -->
