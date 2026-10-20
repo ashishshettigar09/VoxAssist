@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Assistive Voice-to-SMS Companion for Blind Users - FRDM-RW612 & INMP441 Microcontroller Bluetooth Interface Simulator">
+  <title>VoxAssist - Voice to SMS Assistive Companion</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+            <line x1="8" x2="16" y1="22" y2="22"/>
+          </svg>
+        </div>
+        <div>
+          <h1>VoxAssist IoT</h1>
+          <p class="subtitle">Blind Assistive Voice-to-SMS Gateway (FRDM-RW612 + INMP441)</p>
+        </div>
+      </div>
+
+      <!-- Live Connection Pills -->
+      <div class="header-status-group">
+        <div class="status-pill connected" id="bleStatusPill">
+          <span class="status-dot"></span>
+          <span class="status-label">BLE: Connected (FRDM-RW612)</span>
+        </div>
+        <div class="status-pill" id="ttsStatusPill">
+          <span class="status-dot"></span>
+          <span class="status-label">TTS Audio: Active</span>
+        </div>
+        <button class="settings-btn" id="ttsVoiceToggleBtn" title="Toggle Spoken Feedback Voice">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+          </svg>
+          <span id="ttsBtnText">Spoken Feedback: ON</span>
+        </button>
+        <button class="settings-btn install-btn" id="installPwaBtn" title="Install VoxAssist on your Phone">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span id="installBtnText">📱 Install on Phone</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="main-layout">
+      <!-- Left Column: Core Voice Interaction & Accessibility Console -->
+      <section class="panel voice-panel" aria-labelledby="voiceConsoleHeading">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <span class="panel-badge">CORE ASSISTIVE ENGINE</span>
+            <h2 id="voiceConsoleHeading">Voice Interaction & PTT</h2>
+          </div>
+          <span class="assistive-hint">HotKey: Press & Hold <kbd>SPACE</kbd></span>
+        </div>
+
+        <!-- Big Tactile Push-To-Talk Button -->
+        <div class="ptt-container">
+          <button id="pttButton" class="ptt-btn" aria-label="Push to Talk. Press and hold to speak your message command.">
+            <div class="ptt-ring-pulse"></div>
+            <div class="ptt-inner">
+              <svg class="mic-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+                <line x1="8" x2="16" y1="22" y2="22"/>
+              </svg>
+              <span class="ptt-text" id="pttLabel">HOLD TO SPEAK</span>
+              <span class="ptt-subtext" id="pttSubLabel">or click once to toggle</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- Live Audio Waveform Canvas -->
+        <div class="waveform-card">
+          <div class="waveform-header">
+            <span>INMP441 I²S PCM Audio Waveform (16kHz / 16-bit Mono)</span>
+            <span class="level-indicator" id="micLevelLabel">0 dB</span>
+          </div>
+          <canvas id="waveformCanvas" width="540" height="90"></canvas>
+        </div>
+
+        <!-- Live Transcription & NLP Parser Box -->
+        <div class="transcription-card">
+          <div class="card-label-row">
+            <span class="card-label">SPEECH TRANSCRIPT</span>
+            <span class="format-rule">Format: "Send message to [Contact] - [Message]"</span>
+          </div>
+          <div class="transcript-display" id="transcriptDisplay" role="status" aria-live="polite">
+            <p class="placeholder-text">Press and hold the button above or use a quick test scenario below...</p>
+          </div>
+        </div>
+
+        <!-- Parsed Intent Result Card -->
+        <div class="intent-card" id="intentCard">
+          <div class="intent-header">
+            <span class="intent-status-badge" id="intentStatusBadge">PARSER IDLE</span>
+            <span class="timestamp" id="intentTime">--:--:--</span>
+          </div>
+          <div class="intent-grid">
+            <div class="intent-item">
+              <span class="intent-label">RECIPIENT CONTACT</span>
+              <div class="intent-value" id="intentContact">—</div>
+            </div>
+            <div class="intent-item">
+              <span class="intent-label">RESOLVED PHONE NUMBER</span>
+              <div class="intent-value number" id="intentPhone">—</div>
+            </div>
+            <div class="intent-item full-width">
+              <span class="intent-label">EXTRACTED MESSAGE BODY</span>
+              <div class="intent-value message" id="intentMessage">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Spoken Feedback Announcement Banner -->
+        <div class="speech-announcement-card" id="announcementCard">
+          <div class="audio-feedback-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+          </div>
+          <div class="speech-text-wrap">
+            <span class="speech-label">SPOKEN FEEDBACK TO BLIND USER (TTS):</span>
+            <p class="speech-content" id="speechFeedbackText">"System ready. Press and hold to speak."</p>
+          </div>
+        </div>
+
+        <!-- One-Click Preset Test Phrases for Instant Testing -->
+        <div class="presets-section">
+          <div class="presets-header">
+            <span>QUICK PRESET VOICE COMMANDS (Click to simulate speaking):</span>
+          </div>
+          <div class="presets-grid">
+            <button class="preset-btn" data-command="Send message to Mom - I am outside the clinic, please pick me up">
+              <span class="preset-contact">Mom:</span>
+              <span class="preset-msg">"I am outside the clinic..."</span>
+            </button>
+            <button class="preset-btn" data-command="Send message to Doctor Smith - Can we confirm my appointment for tomorrow at 3 PM">
+              <span class="preset-contact">Doctor Smith:</span>
+              <span class="preset-msg">"Can we confirm my appointment..."</span>
+            </button>
+            <button class="preset-btn" data-command="Send message to Alex - I will reach the metro station in ten minutes">
+              <span class="preset-contact">Alex:</span>
+              <span class="preset-msg">"I will reach the metro station..."</span>
+            </button>
+            <button class="preset-btn alert-preset" data-command="Send message to Emergency Services - Need immediate assistance at main gate">
+              <span class="preset-contact">Emergency:</span>
+              <span class="preset-msg">"Need immediate assistance..."</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Hardware Telemetry, Contacts & SMS Outbox -->
+      <section class="side-layout">
+        <!-- Hardware State: FRDM-RW612 + INMP441 + BLE -->
+        <div class="panel hardware-panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-badge cyan">HARDWARE LAYER</span>
+              <h2>FRDM-RW612 & INMP441</h2>
+            </div>
+            <button class="small-outline-btn" id="reconnectBleBtn">Simulate Reconnect</button>
+          </div>
+
+          <div class="hw-spec-grid">
+            <div class="spec-card">
+              <span class="spec-label">MCU Core</span>
+              <span class="spec-value">Cortex-M33 @ 260MHz</span>
+            </div>
+            <div class="spec-card">
+              <span class="spec-label">Microphone</span>
+              <span class="spec-value">INMP441 (I²S / Flexcomm)</span>
+            </div>
+            <div class="spec-card">
+              <span class="spec-label">Audio Buffer</span>
+              <span class="spec-value">eDMA Ping-Pong (16kHz)</span>
+            </div>
+            <div class="spec-card">
+              <span class="spec-label">Bluetooth Radio</span>
+              <span class="spec-value">BLE 5.3 EdgeFast Stack</span>
+            </div>
+          </div>
+
+          <!-- BLE Live Packet Stream Terminal -->
+          <div class="ble-terminal-wrap">
+            <div class="terminal-header">
+              <span>GATT NOTIFICATION PACKET LOG (AUDIO & COMMANDS)</span>
+              <span class="tx-badge" id="txPktCount">TX: 0 pkts</span>
+            </div>
+            <div class="terminal-output" id="blePacketLog">
+              <div class="log-line sys">[SYSTEM] FRDM-RW612 EdgeFast BLE Stack initialized.</div>
+              <div class="log-line sys">[GATT] Service UUID: 0000FFF0-0000-1000-8000-00805F9B34FB</div>
+              <div class="log-line sys">[GATT] Char Audio/Cmd: 0000FFF1 (Notify, Write)</div>
+              <div class="log-line success">[BLE] Paired and bonded with Android Phone (RSSI: -52 dBm)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phone Contact Book (Address Book) -->
+        <div class="panel contacts-panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-badge purple">PHONE CONTACTS</span>
+              <h2>Resolved Address Book</h2>
+            </div>
+            <button class="add-contact-btn" id="openAddContactBtn">+ Add Contact</button>
+          </div>
+
+          <div class="contacts-list" id="contactsList">
+            <!-- Dynamically populated via app.js -->
+          </div>
+        </div>
+
+        <!-- Sent SMS Outbox / Message History -->
+        <div class="panel outbox-panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-badge emerald">DISPATCH OUTBOX</span>
+              <h2>Carrier SMS History</h2>
+            </div>
+            <button class="clear-btn" id="clearOutboxBtn">Clear</button>
+          </div>
+
+          <div class="outbox-list" id="outboxList">
+            <p class="empty-state">No messages dispatched yet. Trigger a voice command above.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal: Add New Contact -->
+    <div class="modal-backdrop" id="contactModalBackdrop" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-header">
+          <h3 id="modalTitle">Add New Contact</h3>
+          <button class="close-modal-btn" id="closeModalBtn" aria-label="Close dialog">&times;</button>
+        </div>
+        <form id="addContactForm">
+          <div class="form-group">
+            <label for="newContactName">Contact Name / Nickname</label>
+            <input type="text" id="newContactName" placeholder="e.g. Sister, John, Caregiver" required>
+          </div>
+          <div class="form-group">
+            <label for="newContactPhone">Mobile Phone Number</label>
+            <input type="tel" id="newContactPhone" placeholder="+1 (555) 000-0000" required>
+          </div>
+          <div class="form-group">
+            <label for="newContactRelation">Relationship / Note</label>
+            <input type="text" id="newContactRelation" placeholder="e.g. Family, Doctor, Neighbor">
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="cancelModalBtn">Cancel</button>
+            <button type="submit" class="btn-primary">Save Contact</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
