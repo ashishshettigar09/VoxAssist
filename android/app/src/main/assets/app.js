@@ -24,7 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
       { id: 2, name: 'Dad', phone: '+919876543211', relation: 'Family' },
       { id: 3, name: 'Doctor', phone: '+919876543212', relation: 'Medical' },
       { id: 4, name: 'Alex', phone: '+919876543213', relation: 'Friend' },
-      { id: 5, name: 'Caregiver', phone: '+919876543214', relation: 'Caregiver' }
+      { id: 5, name: 'Caregiver', phone: '+919876543214', relation: 'Caregiver' },
+      { id: 6, name: 'Ashish Shettigar', phone: '+919876543215', relation: 'Friend' }
     ],
     outbox: []
   };
@@ -103,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const addContactForm = document.getElementById('addContactForm');
   const presetButtons = document.querySelectorAll('.preset-btn');
   const contactSearchInput = document.getElementById('contactSearchInput');
+  const voiceSearchBtn = document.getElementById('voiceSearchBtn');
   const clearSearchBtn = document.getElementById('clearSearchBtn');
   const contactsCountBadge = document.getElementById('contactsCountBadge');
   const a11yBanner = document.getElementById('a11yBanner');
@@ -526,36 +528,318 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // =========================================================================
-  // Contact-Aware Voice Command Parser (WhatsApp Dedicated)
-  // Handles:
-  // - "Send message to [Contact] [Message]"
-  // - "Send message to [Contact] - [Message]"
-  // - "Send message to [Contact] that [Message]"
-  // - "Send WhatsApp message to [Contact] [Message]"
-  // - "Send WhatsApp to [Contact] [Message]"
-  // - "WhatsApp [Contact] [Message]"
-  // - "Message to [Contact] [Message]"
-  // - "Tell [Contact] [Message]"
-  // - "Text [Contact] [Message]"
+  // Advanced Closest Name & Fuzzy Contact Matching Engine
+  // Resolves misrecognized / misspelled speech transcriptions to closest contact
   // =========================================================================
+
+  const aliasMap = {
+    'mom': ['mom', 'mother', 'mummy', 'mum', 'amma', 'maa', 'mommy', 'momma', 'aai', 'mataji'],
+    'dad': ['dad', 'father', 'papa', 'daddy', 'dada', 'appa', 'pop', 'pops', 'pitaji', 'babuji'],
+    'doctor': ['doctor', 'dr', 'dr.', 'clinic', 'physician', 'doc', 'hospital', 'dentist'],
+    'caregiver': ['caregiver', 'nurse', 'assistant', 'helper', 'attendant', 'carer', 'guardian'],
+    'sister': ['sister', 'sis', 'didi', 'akka'],
+    'brother': ['brother', 'bro', 'bhai', 'bhaiya', 'anna'],
+    'wife': ['wife', 'wifey', 'patni', 'spouse', 'partner'],
+    'husband': ['husband', 'hubby', 'pati', 'spouse', 'partner'],
+    'friend': ['friend', 'buddy', 'mate', 'pal', 'yaar', 'dost']
+  };
+
+  /**
+   * Damerau-Levenshtein distance calculation accounting for insertions,
+   * deletions, substitutions, and adjacent transpositions.
+   */
+  function getDamerauLevenshtein(s1, s2) {
+    const len1 = s1.length;
+    const len2 = s2.length;
+    if (len1 === 0) return len2;
+    if (len2 === 0) return len1;
+
+    const d = [];
+    for (let i = 0; i <= len1; i++) {
+      d[i] = new Array(len2 + 1);
+      d[i][0] = i;
+    }
+    for (let j = 0; j <= len2; j++) {
+      d[0][j] = j;
+    }
+
+    for (let i = 1; i <= len1; i++) {
+      for (let j = 1; j <= len2; j++) {
+        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        d[i][j] = Math.min(
+          d[i - 1][j] + 1,       // deletion
+          d[i][j - 1] + 1,       // insertion
+          d[i - 1][j - 1] + cost // substitution
+        );
+        if (i > 1 && j > 1 && s1[i - 1] === s2[j - 2] && s1[i - 2] === s2[j - 1]) {
+          d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + cost); // transposition
+        }
+      }
+    }
+    return d[len1][len2];
+  }
+
+  /**
+   * Phonetic simplification transformer for speech recognition sound-alikes:
+   * maps phonetic variants ('ph'->'f', 'sh'->'s', 'ck'/'c'/'q'->'k', 'wh'/'w'->'v', etc.)
+   * and collapses duplicate letters so misrecognized speech (e.g. "Ashis" vs "Ashish", "Alec" vs "Alex") matches.
+   */
+  function phoneticSimplify(s) {
+    if (!s) return '';
+    let str = String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!str) return '';
+
+    str = str
+      .replace(/ph/g, 'f')
+      .replace(/gh/g, 'f')
+      .replace(/ck/g, 'k')
+      .replace(/sh/g, 's')
+      .replace(/ch/g, 'c')
+      .replace(/th/g, 't')
+      .replace(/dh/g, 'd')
+      .replace(/bh/g, 'b')
+      .replace(/kh/g, 'k')
+      .replace(/jh/g, 'j')
+      .replace(/qu/g, 'k')
+      .replace(/q/g, 'k')
+      .replace(/x/g, 'ks')
+      .replace(/z/g, 's')
+      .replace(/c(?=[eiy])/g, 's')
+      .replace(/c/g, 'k')
+      .replace(/wh/g, 'v')
+      .replace(/w/g, 'v')
+      .replace(/ee/g, 'i')
+      .replace(/ea/g, 'i')
+      .replace(/oo/g, 'u')
+      .replace(/ou/g, 'u')
+      .replace(/ai/g, 'e')
+      .replace(/ay/g, 'e')
+      .replace(/ey/g, 'e')
+      .replace(/y/g, 'i');
+
+    let result = '';
+    let prev = '';
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (ch !== prev) {
+        result += ch;
+        prev = ch;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Computes similarity score [0.0..1.0] and edit distance between query and target
+   */
+  function computeSimilarity(query, target) {
+    const qClean = (query || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const tClean = (target || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    if (!qClean || !tClean) return { score: 0, distance: 99 };
+
+    if (qClean === tClean) {
+      return { score: 1.0, distance: 0, isExact: true };
+    }
+
+    // Substring / containment match
+    if (tClean.includes(qClean) && qClean.length >= 2) {
+      const ratio = qClean.length / tClean.length;
+      return { score: 0.88 + 0.12 * ratio, distance: 0, isSubstring: true };
+    }
+    if (qClean.includes(tClean) && tClean.length >= 2) {
+      const ratio = tClean.length / qClean.length;
+      return { score: 0.85 + 0.12 * ratio, distance: 0, isSubstring: true };
+    }
+
+    // Prefix match with length ratio bonus
+    if (tClean.startsWith(qClean) && qClean.length >= 2) {
+      const ratio = qClean.length / tClean.length;
+      return { score: 0.90 + 0.10 * ratio, distance: 0, isPrefix: true };
+    }
+    if (qClean.startsWith(tClean) && tClean.length >= 2) {
+      const ratio = tClean.length / qClean.length;
+      return { score: 0.86 + 0.10 * ratio, distance: 0, isPrefix: true };
+    }
+
+    const dist = getDamerauLevenshtein(qClean, tClean);
+    const maxLen = Math.max(qClean.length, tClean.length);
+    const levSim = 1.0 - (dist / maxLen);
+
+    const qPhon = phoneticSimplify(qClean);
+    const tPhon = phoneticSimplify(tClean);
+    let phonSim = 0;
+    if (qPhon && qPhon === tPhon) {
+      phonSim = 1.0;
+    } else {
+      const pDist = getDamerauLevenshtein(qPhon, tPhon);
+      const pMax = Math.max(qPhon.length, tPhon.length);
+      phonSim = pMax > 0 ? 1.0 - (pDist / pMax) : 0;
+    }
+
+    const compositeScore = phonSim >= 0.88
+      ? Math.max(levSim, 0.82 + 0.18 * phonSim)
+      : (0.55 * levSim + 0.45 * phonSim);
+
+    return { score: compositeScore, distance: dist, phonSim, levSim };
+  }
+
+  /**
+   * Scores a candidate query against a Contact object, testing against
+   * full name, first name, last name, individual words, relations, and aliases.
+   */
+  function scoreContact(query, contact) {
+    if (!contact) return { score: 0, distance: 99, matchedTarget: '' };
+    const qClean = (query || '').toLowerCase().trim();
+    const cName = String(contact.name || '').toLowerCase().trim();
+    const cRelation = String(contact.relation || '').toLowerCase().trim();
+
+    let bestScore = 0;
+    let minDistance = 99;
+    let matchedTarget = '';
+
+    // 1. Full name
+    const full = computeSimilarity(qClean, cName);
+    if (full.score > bestScore) {
+      bestScore = full.score;
+      minDistance = full.distance;
+      matchedTarget = contact.name || '';
+    }
+
+    // 2. Name tokens (first name, last name, individual words)
+    const tokens = cName.split(/\s+/).filter(w => w.length >= 2);
+    for (const token of tokens) {
+      const t = computeSimilarity(qClean, token);
+      if (t.score > bestScore) {
+        bestScore = t.score;
+        minDistance = t.distance;
+        matchedTarget = token;
+      }
+    }
+
+    // 3. Relation
+    if (cRelation) {
+      const r = computeSimilarity(qClean, cRelation);
+      if (r.score > bestScore) {
+        bestScore = r.score;
+        minDistance = r.distance;
+        matchedTarget = contact.relation || '';
+      }
+    }
+
+    // 4. Aliases
+    for (const [key, synonyms] of Object.entries(aliasMap)) {
+      const matchesContact = synonyms.some(s => cName.includes(s) || (cRelation && cRelation.includes(s)));
+      if (matchesContact) {
+        for (const syn of synonyms) {
+          const sRes = computeSimilarity(qClean, syn);
+          if (sRes.score > bestScore) {
+            bestScore = sRes.score;
+            minDistance = sRes.distance;
+            matchedTarget = syn;
+          }
+        }
+      }
+    }
+
+    return { score: bestScore, distance: minDistance, matchedTarget };
+  }
+
+  /**
+   * Finds the closest matching Contact in state.contacts for a candidate name query.
+   * Selects the highest similarity score that passes the acceptance threshold.
+   */
+  function findClosestContact(query, contactsList = state.contacts) {
+    if (!query || !contactsList || contactsList.length === 0) return null;
+    const cleanQ = query.trim();
+    const qLen = cleanQ.replace(/[^a-zA-Z0-9]/g, '').length;
+    if (qLen === 0) return null;
+
+    let bestMatch = null;
+    let bestScore = 0;
+    let bestDist = 99;
+    let bestTarget = '';
+
+    for (const contact of contactsList) {
+      const res = scoreContact(cleanQ, contact);
+      if (res.score > bestScore) {
+        bestScore = res.score;
+        bestDist = res.distance;
+        bestTarget = res.matchedTarget;
+        bestMatch = contact;
+      }
+    }
+
+    if (!bestMatch) return null;
+
+    // Acceptance thresholds (adaptive to length)
+    let isAcceptable = false;
+    if (bestScore >= 0.80) {
+      isAcceptable = true;
+    } else if (qLen <= 4 && bestDist <= 1 && bestScore >= 0.60) {
+      isAcceptable = true; // "Jon" -> "John", "Alec" -> "Alex", "Mum" -> "Mom"
+    } else if (qLen >= 5 && qLen <= 8 && bestDist <= 2 && bestScore >= 0.60) {
+      isAcceptable = true; // "Ashis" -> "Ashish", "Docter" -> "Doctor"
+    } else if (qLen > 8 && bestDist <= 3 && bestScore >= 0.60) {
+      isAcceptable = true;
+    } else {
+      isAcceptable = bestScore >= 0.68;
+    }
+
+    if (isAcceptable) {
+      return {
+        contact: bestMatch,
+        score: bestScore,
+        distance: bestDist,
+        matchedTarget: bestTarget,
+        isExact: cleanQ.toLowerCase() === String(bestMatch.name || '').toLowerCase()
+      };
+    }
+    return null;
+  }
+
+  // Unified findContact calling closest match engine
+  function findContact(query) {
+    const res = findClosestContact(query);
+    return res ? res.contact : null;
+  }
+
+  // Compatibility helper
+  function getEditDistance(a, b) {
+    return getDamerauLevenshtein(a, b);
+  }
+
+  /**
+   * Contact-Aware Voice Command Parser (WhatsApp Dedicated)
+   * Resolves voice command to closest contact name (handling recognition misspellings),
+   * extracts message body, announces spoken feedback, and dispatches via WhatsApp.
+   */
   function processVoiceCommand(rawText) {
     const cleanText = rawText.trim();
     transcriptDisplay.textContent = `"${cleanText}"`;
     const now = new Date();
     intentTime.textContent = now.toTimeString().split(' ')[0];
 
-    // 1. Strip trigger prefix
+    // 1. Comprehensive Conversational Trigger Prefixes
     const prefixes = [
-      /^send\s+(?:a\s+)?whatsapp\s+message\s+to\s+/i,
-      /^send\s+(?:a\s+)?message\s+to\s+/i,
-      /^send\s+(?:a\s+)?whatsapp\s+to\s+/i,
-      /^send\s+to\s+/i,
-      /^whatsapp\s+to\s+/i,
-      /^whatsapp\s+/i,
-      /^message\s+to\s+/i,
-      /^tell\s+/i,
-      /^text\s+to\s+/i,
-      /^text\s+/i
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?whatsapp\s+message\s+to\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?message\s+to\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?whatsapp\s+to\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?message\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?whatsapp\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+to\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?whatsapp\s+to\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?whatsapp\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?message\s+to\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?message\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?text\s+to\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?text\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?tell\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?ask\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?say\s+to\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?notify\s+/i,
+      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?contact\s+/i
     ];
 
     let stripped = cleanText;
@@ -567,128 +851,93 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // 2. Identify Contact using intelligent matcher against state.contacts
-    let resolvedContact = null;
-    let messageBody = '';
+    // 2. Multi-Candidate Evaluation (Delimiters & Word Spans)
+    const candidates = [];
 
-    // Strategy A: Check contacts sorted by longest name first (so "Alex Smith" matches before "Alex")
-    const sortedContacts = [...state.contacts].sort((a, b) => b.name.length - a.name.length);
-    const lowerStripped = stripped.toLowerCase();
-
-    for (const contact of sortedContacts) {
-      const cNameLower = contact.name.toLowerCase();
-      const firstName = cNameLower.split(' ')[0];
-
-      // Exact full name at beginning of stripped phrase
-      if (lowerStripped.startsWith(cNameLower)) {
-        resolvedContact = contact;
-        messageBody = stripped.substring(cNameLower.length).trim();
-        break;
-      }
-      // First name match (at least 3 characters)
-      else if (firstName.length >= 3 && (lowerStripped.startsWith(firstName + ' ') || lowerStripped === firstName)) {
-        resolvedContact = contact;
-        messageBody = stripped.substring(firstName.length).trim();
-        break;
-      }
-      // Relation match (e.g. "mom", "dad", "doctor", "caregiver")
-      else if (contact.relation && lowerStripped.startsWith(contact.relation.toLowerCase())) {
-        resolvedContact = contact;
-        messageBody = stripped.substring(contact.relation.length).trim();
-        break;
+    // Delimiter Separation (-, :, that, saying, to say, please, telling, about)
+    const delimMatch = stripped.match(/^(.+?)\s*(?:[-:]|(?:\s+(?:that|saying|to say|please|telling|about)))\s+(.+)$/i);
+    if (delimMatch) {
+      const query = delimMatch[1].trim();
+      const rawBody = delimMatch[2].trim();
+      const match = findClosestContact(query);
+      if (match) {
+        const cleanBody = rawBody
+          .replace(/^[-:]\s*/, '')
+          .replace(/^(?:that|saying|to say)\s+/i, '')
+          .replace(/^["']|["']$/g, '')
+          .trim();
+        candidates.push({
+          contact: match.contact,
+          score: match.score + 0.05,
+          distance: match.distance,
+          query: query,
+          message: cleanBody,
+          isExact: match.isExact
+        });
       }
     }
 
-    // Strategy B: Check common aliases if no direct contact matched
-    if (!resolvedContact) {
-      const aliasMap = {
-        'mom': ['mom', 'mother', 'mummy', 'amma', 'maa'],
-        'dad': ['dad', 'father', 'papa', 'daddy', 'appa'],
-        'doctor': ['doctor', 'dr', 'dr.', 'clinic', 'physician'],
-        'caregiver': ['caregiver', 'nurse', 'assistant', 'helper'],
-        'sis': ['sis', 'sister'],
-        'bro': ['bro', 'brother']
-      };
+    // N-gram word spans (1 to 3 words from start of stripped text)
+    const words = stripped.split(/\s+/).filter(Boolean);
+    const maxWords = Math.min(3, words.length);
 
-      for (const [alias, synonyms] of Object.entries(aliasMap)) {
-        if (lowerStripped.startsWith(alias)) {
-          const match = state.contacts.find(c => {
-            const nameL = c.name.toLowerCase();
-            const relL = (c.relation || '').toLowerCase();
-            return synonyms.some(s => nameL.includes(s) || relL.includes(s));
-          });
-          if (match) {
-            resolvedContact = match;
-            messageBody = stripped.substring(alias.length).trim();
-            break;
-          }
-        }
+    for (let count = 1; count <= maxWords; count++) {
+      const queryCandidate = words.slice(0, count).join(' ');
+      const remainder = words.slice(count).join(' ');
+      const match = findClosestContact(queryCandidate);
+      if (match) {
+        const cleanBody = remainder
+          .replace(/^[-:]\s*/, '')
+          .replace(/^(?:that|saying|to say)\s+/i, '')
+          .replace(/^["']|["']$/g, '')
+          .trim();
+        const multiWordBonus = (count > 1 && String(match.contact.name || '').includes(' ')) ? 0.08 : 0;
+        candidates.push({
+          contact: match.contact,
+          score: match.score + multiWordBonus,
+          distance: match.distance,
+          query: queryCandidate,
+          message: cleanBody,
+          isExact: match.isExact
+        });
       }
     }
 
-    // Strategy C: Check for explicit delimiters (-, :, that, saying)
-    if (!resolvedContact) {
-      const delimiterMatch = stripped.match(/^([^-:]+?)\s*[-:]\s*(.+)$/i) || 
-                             stripped.match(/^(.+?)\s+(?:saying|that|to say)\s+(.+)$/i);
-      if (delimiterMatch) {
-        const query = delimiterMatch[1].trim();
-        const found = findContact(query);
-        if (found) {
-          resolvedContact = found;
-          messageBody = delimiterMatch[2].trim();
-        }
-      }
-    }
+    // Select the candidate with the highest similarity score
+    candidates.sort((a, b) => b.score - a.score);
+    const champion = candidates[0] || null;
 
-    // Strategy D: Check first word or two against findContact
-    if (!resolvedContact) {
-      const words = stripped.split(/\s+/);
-      if (words.length >= 2) {
-        // Try first 2 words
-        let tryName = words.slice(0, 2).join(' ');
-        let found = findContact(tryName);
-        if (found) {
-          resolvedContact = found;
-          messageBody = words.slice(2).join(' ').trim();
-        } else {
-          // Try 1st word
-          tryName = words[0];
-          found = findContact(tryName);
-          if (found) {
-            resolvedContact = found;
-            messageBody = words.slice(1).join(' ').trim();
-          }
-        }
-      }
-    }
-
-    // Clean up messageBody (remove leading delimiters & filler conjunctions)
-    messageBody = messageBody
-      .replace(/^[-:]\s*/, '')
-      .replace(/^(?:that|saying|to say|to)\s+/i, '')
-      .replace(/^["']|["']$/g, '')
-      .trim();
-
-    // 3. Dispatch or report result
-    if (resolvedContact) {
+    if (champion) {
+      const resolvedContact = champion.contact;
+      let messageBody = champion.message;
       if (!messageBody) {
         messageBody = 'Hello, this is a voice message from VoxAssist.';
       }
 
-      intentStatusBadge.textContent = 'WHATSAPP READY';
-      intentStatusBadge.className = 'intent-status-badge parsed';
-      intentContact.textContent = resolvedContact.name;
+      const isExactMatch = champion.isExact;
+      if (isExactMatch) {
+        intentStatusBadge.textContent = 'WHATSAPP READY';
+        intentStatusBadge.className = 'intent-status-badge parsed';
+        intentContact.textContent = resolvedContact.name;
+        speakAloud(`Sending WhatsApp message to ${resolvedContact.name}: "${messageBody}".`);
+        logBlePacket(`[WHATSAPP DISPATCH] Recipient: ${resolvedContact.name} (${resolvedContact.phone})`, 'success');
+      } else {
+        // Misrecognized / fuzzy closest match
+        intentStatusBadge.textContent = 'MATCHED (CLOSEST)';
+        intentStatusBadge.className = 'intent-status-badge closest';
+        intentContact.innerHTML = `${escapeHtml(resolvedContact.name)} <span class="closest-tag" title="Matched from '${escapeHtml(champion.query)}'">Matched from "${escapeHtml(champion.query)}" (${Math.round(champion.score * 100)}%)</span>`;
+        speakAloud(`Matched closest contact ${resolvedContact.name} for ${champion.query}. Sending WhatsApp message: "${messageBody}".`);
+        logBlePacket(`[CLOSEST MATCH] Resolved "${champion.query}" -> ${resolvedContact.name} (${Math.round(champion.score * 100)}% match)`, 'success');
+      }
+
       intentPhone.textContent = resolvedContact.phone;
       intentMessage.textContent = messageBody;
-
       playSuccessChime();
-      speakAloud(`Sending WhatsApp message to ${resolvedContact.name}: "${messageBody}".`);
-      logBlePacket(`[WHATSAPP DISPATCH] Recipient: ${resolvedContact.name} (${resolvedContact.phone})`, 'success');
 
-      // Update buffer telemetry monitor
+      // Update buffer telemetry
       window.updateBufferTelemetry('SENT', state.bufferedPacketsCount, state.bufferedBytesCount, `To ${resolvedContact.name}: ${messageBody}`);
 
-      // Add to UI outbox history
+      // Add to outbox history
       addMessageToOutbox(resolvedContact, messageBody);
 
       // Send via Native Android Bridge
@@ -700,7 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } else {
         // Browser fallback
-        let cleanPhone = resolvedContact.phone.replace(/[^0-9+]/g, '');
+        let cleanPhone = String(resolvedContact.phone || '').replace(/[^0-9+]/g, '');
         if (cleanPhone.startsWith('+')) cleanPhone = cleanPhone.substring(1);
         if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
         window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(messageBody)}`, '_blank');
@@ -714,76 +963,10 @@ document.addEventListener('DOMContentLoaded', () => {
       intentMessage.textContent = cleanText;
 
       playErrorChime();
-      const topNames = state.contacts.slice(0, 3).map(c => c.name).join(', ');
+      const topNames = state.contacts.slice(0, 3).map(c => c.name).filter(Boolean).join(', ');
       speakAloud(`Could not find ${stripped.split(' ')[0] || 'that contact'}. Available contacts include: ${topNames}.`);
       logBlePacket(`[PARSER] Unresolved contact query in: "${cleanText}"`, 'err');
     }
-  }
-
-  // Robust contact search: Exact -> Relation -> Prefix -> Substring -> Distance
-  function findContact(query) {
-    if (!query) return null;
-    const q = query.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-    if (!q) return null;
-
-    // 1. Exact Name match
-    let match = state.contacts.find(c => c.name.toLowerCase().replace(/[^a-z0-9]/g, '') === q);
-    if (match) return match;
-
-    // 2. Exact Relation match
-    match = state.contacts.find(c => (c.relation || '').toLowerCase().replace(/[^a-z0-9]/g, '') === q);
-    if (match) return match;
-
-    // 3. Name starts with query
-    match = state.contacts.find(c => c.name.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(q));
-    if (match) return match;
-
-    // 4. Query starts with contact name
-    match = state.contacts.find(c => {
-      const name = c.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return name.length >= 3 && q.startsWith(name);
-    });
-    if (match) return match;
-
-    // 5. Individual word match
-    const qWords = query.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
-    match = state.contacts.find(c => {
-      const nameWords = c.name.toLowerCase().split(/\s+/);
-      return qWords.some(qw => nameWords.some(nw => nw === qw || nw.startsWith(qw)));
-    });
-    if (match) return match;
-
-    // 6. Fuzzy edit distance (Levenshtein <= 2 for words >= 4)
-    if (q.length >= 4) {
-      match = state.contacts.find(c => {
-        const cClean = c.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        return getEditDistance(q, cClean) <= 2;
-      });
-      if (match) return match;
-    }
-
-    return null;
-  }
-
-  function getEditDistance(a, b) {
-    if (a.length === 0) return b.length;
-    if (b.length === 0) return a.length;
-    const matrix = [];
-    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-    for (let i = 1; i <= b.length; i++) {
-      for (let j = 1; j <= a.length; j++) {
-        if (b.charAt(i - 1) === a.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1)
-          );
-        }
-      }
-    }
-    return matrix[b.length][a.length];
   }
 
   // =========================================================================
@@ -795,8 +978,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const msgItem = {
       id: Date.now(),
-      recipientName: contact.name,
-      phoneNumber: contact.phone,
+      recipientName: contact.name || 'Unknown',
+      phoneNumber: contact.phone || '',
       text: messageText,
       time: timeStr
     };
@@ -847,47 +1030,127 @@ document.addEventListener('DOMContentLoaded', () => {
   // Contact Directory Rendering, Filtering & Highlighting
   // =========================================================================
   function highlightText(text, query) {
-    if (!query) return escapeHtml(text);
-    const escapedText = escapeHtml(text);
-    const cleanQ = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!text) return '';
+    const safeText = String(text);
+    if (!query) return escapeHtml(safeText);
+    const cleanQ = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!cleanQ) return escapeHtml(safeText);
     const regex = new RegExp(`(${cleanQ})`, 'gi');
-    return escapedText.replace(regex, '<span class="match-highlight">$1</span>');
+    return escapeHtml(safeText).replace(regex, '<span class="match-highlight">$1</span>');
+  }
+
+  function contactMatchesCategory(c, category) {
+    if (!category || category === 'all') return true;
+    const cat = category.toLowerCase().trim();
+    const rel = String(c.relation || '').toLowerCase();
+    const name = String(c.name || '').toLowerCase();
+
+    if (cat === 'family') {
+      return rel.includes('family') ||
+        /\b(mom|mother|mummy|mum|amma|maa|dad|father|papa|daddy|dada|appa|sister|sis|didi|brother|bro|bhai|bhaiya|wife|husband|son|daughter|grandma|grandpa|nani|dadi|uncle|aunt|chacha|mama)\b/i.test(name) ||
+        /\b(mom|mother|mummy|mum|dad|father|papa|sister|brother|wife|husband)\b/i.test(rel);
+    }
+    if (cat === 'medical') {
+      return rel.includes('medical') ||
+        /\b(doctor|dr|dr\.|clinic|hospital|physician|dentist|doc|med)\b/i.test(name) ||
+        /\b(medical|doctor|clinic|hospital)\b/i.test(rel);
+    }
+    if (cat === 'friend') {
+      return rel.includes('friend') ||
+        /\b(friend|buddy|mate|pal|yaar|dost)\b/i.test(rel) ||
+        (!rel.includes('family') && !rel.includes('medical') && !rel.includes('caregiver'));
+    }
+    if (cat === 'caregiver') {
+      return rel.includes('caregiver') ||
+        /\b(caregiver|nurse|assistant|helper|attendant|carer|guardian)\b/i.test(name) ||
+        /\b(caregiver|nurse|assistant|helper|attendant|carer)\b/i.test(rel);
+    }
+    if (cat === 'phone') {
+      return rel.includes('phone') || rel.includes('device') || rel.includes('contact');
+    }
+    return rel.includes(cat) || name.includes(cat);
   }
 
   function renderContacts(listToRender = null, searchQuery = '') {
-    // If no list passed, filter based on active category chip and search input
     if (!listToRender) {
       const q = (contactSearchInput ? contactSearchInput.value : '').toLowerCase().trim();
       searchQuery = q;
-      let filtered = state.contacts;
+      const allContacts = state.contacts || [];
 
-      // Category chip filter
-      if (state.activeFilterCategory && state.activeFilterCategory !== 'all') {
-        filtered = filtered.filter(c => 
-          (c.relation || '').toLowerCase().includes(state.activeFilterCategory.toLowerCase())
-        );
-      }
-
-      // Search query filter (matches name, phone numbers, or relation)
-      if (q) {
-        filtered = filtered.filter(c => {
-          const nameMatch = c.name.toLowerCase().includes(q);
-          const phoneMatch = (c.phone || '').replace(/[^0-9]/g, '').includes(q.replace(/[^0-9]/g, ''));
-          const relationMatch = (c.relation || '').toLowerCase().includes(q);
-          return nameMatch || phoneMatch || relationMatch;
-        });
-      }
-      listToRender = filtered;
-    }
-
-    if (contactsCountBadge) {
-      if (listToRender.length === state.contacts.length) {
-        contactsCountBadge.textContent = `${state.contacts.length} contacts`;
+      if (!q) {
+        // No search query: filter strictly by category chip
+        listToRender = allContacts.filter(c => contactMatchesCategory(c, state.activeFilterCategory));
       } else {
-        contactsCountBadge.textContent = `Showing ${listToRender.length} of ${state.contacts.length}`;
+        // Multi-tier Search Filter:
+        // 1. Direct Substring Matches (name, phone, relation)
+        const exactMatches = [];
+        const nonExactCandidates = [];
+        const cleanQDigits = q.replace(/[^0-9]/g, '');
+
+        for (const c of allContacts) {
+          const cName = String(c.name || '').toLowerCase();
+          const cPhone = String(c.phone || '');
+          const cCleanPhone = cPhone.replace(/[^0-9]/g, '');
+          const cRel = String(c.relation || '').toLowerCase();
+
+          const nameMatch = cName.includes(q);
+          const phoneMatch = (cleanQDigits.length >= 2 && cCleanPhone.includes(cleanQDigits)) || cPhone.toLowerCase().includes(q);
+          const relationMatch = cRel.includes(q);
+
+          if (nameMatch || phoneMatch || relationMatch) {
+            exactMatches.push({
+              ...c,
+              _matchType: 'exact',
+              _score: nameMatch ? 1.0 : 0.9
+            });
+          } else {
+            nonExactCandidates.push(c);
+          }
+        }
+
+        // 2. Fuzzy & Closest Spelling Matches
+        const fuzzyMatches = [];
+        for (const c of nonExactCandidates) {
+          const res = scoreContact(q, c);
+          if (res.score >= 0.60 || res.distance <= 2) {
+            fuzzyMatches.push({
+              ...c,
+              _matchType: 'fuzzy',
+              _score: res.score,
+              _matchedTarget: res.matchedTarget
+            });
+          }
+        }
+
+        // Sort fuzzy matches by similarity score descending
+        fuzzyMatches.sort((a, b) => b._score - a._score);
+
+        // Combine exact first, then fuzzy matches
+        let combined = [...exactMatches, ...fuzzyMatches];
+
+        // If category filter is active (and not 'all'), prioritize in-category matches
+        if (state.activeFilterCategory && state.activeFilterCategory !== 'all') {
+          const inCat = combined.filter(c => contactMatchesCategory(c, state.activeFilterCategory));
+          if (inCat.length > 0) {
+            combined = inCat;
+          }
+        }
+
+        listToRender = combined;
       }
     }
 
+    // Update contacts count badge
+    if (contactsCountBadge) {
+      const total = (state.contacts || []).length;
+      if (!searchQuery && state.activeFilterCategory === 'all') {
+        contactsCountBadge.textContent = `${total} contacts`;
+      } else {
+        contactsCountBadge.textContent = `Showing ${listToRender.length} of ${total}`;
+      }
+    }
+
+    // Handle Empty State
     if (listToRender.length === 0) {
       contactsList.innerHTML = `
         <div class="empty-state">
@@ -903,26 +1166,40 @@ document.addEventListener('DOMContentLoaded', () => {
           state.activeFilterCategory = 'all';
           updateActiveFilterChip();
           renderContacts();
+          if (contactSearchInput) contactSearchInput.focus();
         });
       }
       return;
     }
 
-    contactsList.innerHTML = listToRender.map(c => `
-      <div class="contact-item" data-name="${escapeHtml(c.name)}" data-phone="${escapeHtml(c.phone)}" title="Tap to test WhatsApp command for ${escapeHtml(c.name)}">
-        <div class="contact-info-wrap">
-          <div class="contact-avatar">${escapeHtml(c.name.charAt(0).toUpperCase())}</div>
-          <div class="contact-meta">
-            <span class="contact-name">${highlightText(c.name, searchQuery)}</span>
-            <span class="contact-phone">${highlightText(c.phone, searchQuery)}</span>
+    // Render Contact Items
+    contactsList.innerHTML = listToRender.map(c => {
+      const name = String(c.name || 'Unknown');
+      const phone = String(c.phone || '');
+      const relation = String(c.relation || 'Contact');
+      const firstChar = (name.trim().charAt(0) || '?').toUpperCase();
+      const isFuzzy = c._matchType === 'fuzzy' || (searchQuery && !name.toLowerCase().includes(searchQuery) && !phone.includes(searchQuery));
+      const scorePct = c._score ? Math.round(c._score * 100) : null;
+
+      return `
+        <div class="contact-item" data-name="${escapeHtml(name)}" data-phone="${escapeHtml(phone)}" title="Tap to send WhatsApp to ${escapeHtml(name)}">
+          <div class="contact-info-wrap">
+            <div class="contact-avatar">${escapeHtml(firstChar)}</div>
+            <div class="contact-meta">
+              <span class="contact-name">${highlightText(name, searchQuery)}${isFuzzy ? ` <span class="closest-match-tag">Closest Match${scorePct ? ` (${scorePct}%)` : ''}</span>` : ''}</span>
+              <span class="contact-phone">${highlightText(phone, searchQuery)}</span>
+            </div>
+          </div>
+          <div class="contact-item-actions">
+            <span class="contact-relation">${highlightText(relation, searchQuery)}</span>
+            <button class="contact-action-btn quick-send-btn" title="Send WhatsApp to ${escapeHtml(name)}">💬 WhatsApp</button>
           </div>
         </div>
-        <div class="contact-item-actions">
-          <span class="contact-relation">${highlightText(c.relation || 'Contact', searchQuery)}</span>
-          <button class="contact-action-btn quick-send-btn" title="Send WhatsApp to ${escapeHtml(c.name)}">💬 WhatsApp</button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
+
+    // Smooth scroll to top of list when filter changes
+    contactsList.scrollTop = 0;
 
     // Attach click handlers
     contactsList.querySelectorAll('.contact-item').forEach(item => {
@@ -943,14 +1220,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   renderContacts();
 
-  // Instant Live Search Filter Handlers (input, keyup, change)
+  // Instant Live Search Filter Handlers (input, keyup, search, change)
   if (contactSearchInput) {
     const handleSearchInput = (e) => {
-      const q = e.target.value.toLowerCase().trim();
+      const q = (e.target.value || '').trim();
       if (clearSearchBtn) {
         clearSearchBtn.hidden = !q;
       }
-      renderContacts(null, q);
+      renderContacts(null, q.toLowerCase());
     };
 
     ['input', 'keyup', 'search', 'change'].forEach(ev => {
@@ -958,12 +1235,71 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Clear Search Button Handler
   if (clearSearchBtn) {
     clearSearchBtn.addEventListener('click', () => {
-      contactSearchInput.value = '';
+      if (contactSearchInput) {
+        contactSearchInput.value = '';
+        contactSearchInput.focus();
+      }
       clearSearchBtn.hidden = true;
       renderContacts();
-      contactSearchInput.focus();
+    });
+  }
+
+  // Voice Search Mic in Search Bar
+  if (voiceSearchBtn) {
+    let searchRecognition = null;
+    voiceSearchBtn.addEventListener('click', () => {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        speakAloud('Voice search is not supported on this browser. Type in the search box.');
+        return;
+      }
+
+      if (searchRecognition) {
+        searchRecognition.abort();
+        searchRecognition = null;
+        voiceSearchBtn.classList.remove('listening');
+        return;
+      }
+
+      try {
+        searchRecognition = new SpeechRec();
+        searchRecognition.lang = 'en-US';
+        searchRecognition.continuous = false;
+        searchRecognition.interimResults = false;
+
+        voiceSearchBtn.classList.add('listening');
+        playStartChime();
+        speakAloud('Listening for contact name to search...');
+
+        searchRecognition.onresult = (event) => {
+          const spoken = event.results[0][0].transcript.trim().replace(/[.]/g, '');
+          if (contactSearchInput) {
+            contactSearchInput.value = spoken;
+            if (clearSearchBtn) clearSearchBtn.hidden = false;
+            renderContacts(null, spoken.toLowerCase());
+            speakAloud(`Searching for ${spoken}`);
+          }
+        };
+
+        searchRecognition.onerror = (err) => {
+          console.warn('Voice search error:', err);
+          voiceSearchBtn.classList.remove('listening');
+          searchRecognition = null;
+        };
+
+        searchRecognition.onend = () => {
+          voiceSearchBtn.classList.remove('listening');
+          searchRecognition = null;
+        };
+
+        searchRecognition.start();
+      } catch (err) {
+        console.warn('Could not start voice search:', err);
+        voiceSearchBtn.classList.remove('listening');
+      }
     });
   }
 
@@ -1186,7 +1522,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function escapeHtml(str) {
-    return str.replace(/[&<>'"]/g, 
+    if (str == null) return '';
+    return String(str).replace(/[&<>'"]/g, 
       tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
     );
   }

@@ -83,10 +83,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         initBluetooth()
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun initWebView() {
         webView = findViewById(R.id.webView)
         webView?.apply {
+            isFocusable = true
+            isFocusableInTouchMode = true
+            requestFocus()
+            setOnTouchListener { v, event ->
+                when (event.action) {
+                    android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP -> {
+                        if (!v.hasFocus()) {
+                            v.requestFocus()
+                        }
+                    }
+                }
+                false
+            }
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
@@ -157,9 +170,35 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     fun syncContactsToWebView() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
             val json = getDeviceContactsJson()
+            val base64 = android.util.Base64.encodeToString(json.toByteArray(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP)
             runOnUiThread {
-                webView?.evaluateJavascript("if (window.loadDeviceContacts) { window.loadDeviceContacts($json); }", null)
+                webView?.evaluateJavascript(
+                    "if (window.loadDeviceContacts) { try { window.loadDeviceContacts(decodeURIComponent(escape(atob('$base64')))); } catch(e) { console.error('Sync err:', e); } }",
+                    null
+                )
             }
+        }
+    }
+
+    private fun inferRelationCategory(name: String): String {
+        val lower = name.lowercase().trim()
+        return when {
+            lower.contains("mom") || lower.contains("mother") || lower.contains("mummy") || lower.contains("mum") ||
+            lower.contains("amma") || lower.contains("maa") || lower.contains("dad") || lower.contains("father") ||
+            lower.contains("papa") || lower.contains("appa") || lower.contains("sister") || lower.contains("sis") ||
+            lower.contains("didi") || lower.contains("brother") || lower.contains("bro") || lower.contains("bhai") ||
+            lower.contains("bhaiya") || lower.contains("wife") || lower.contains("husband") || lower.contains("son") ||
+            lower.contains("daughter") || lower.contains("grandma") || lower.contains("grandpa") || lower.contains("nani") ||
+            lower.contains("dadi") || lower.contains("uncle") || lower.contains("aunt") || lower.contains("chacha") ||
+            lower.contains("mama") -> "Family"
+
+            lower.contains("doctor") || lower.contains("dr.") || lower.contains("dr ") || lower.contains("clinic") ||
+            lower.contains("hospital") || lower.contains("physician") || lower.contains("dentist") || lower.contains("doc") -> "Medical"
+
+            lower.contains("caregiver") || lower.contains("nurse") || lower.contains("assistant") ||
+            lower.contains("helper") || lower.contains("attendant") || lower.contains("carer") -> "Caregiver"
+
+            else -> "Phone Contact"
         }
     }
 
@@ -180,16 +219,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
                 val seen = HashSet<String>()
                 while (it.moveToNext()) {
-                    val name = it.getString(nameIdx) ?: continue
+                    val name = it.getString(nameIdx)?.trim() ?: continue
                     val rawNum = it.getString(numIdx) ?: continue
                     val cleanNum = rawNum.replace("[^0-9+]".toRegex(), "")
-                    if (cleanNum.isNotEmpty() && !seen.contains(name.lowercase())) {
+                    if (name.isNotEmpty() && cleanNum.isNotEmpty() && !seen.contains(name.lowercase())) {
                         seen.add(name.lowercase())
                         val obj = JSONObject()
                         obj.put("id", list.length() + 1)
                         obj.put("name", name)
                         obj.put("phone", cleanNum)
-                        obj.put("relation", "Phone Contact")
+                        obj.put("relation", inferRelationCategory(name))
                         list.put(obj)
                     }
                 }
@@ -614,42 +653,283 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Intelligent Contact-Aware Voice Command Parser:
-     * Handles:
-     * - "Send message to [Contact] [Message]"
-     * - "Send message to [Contact] - [Message]"
-     * - "Send message to [Contact] that [Message]"
-     * - "Send WhatsApp message to [Contact] [Message]"
-     * - "Send WhatsApp to [Contact] [Message]"
-     * - "WhatsApp [Contact] [Message]"
-     * - "Message to [Contact] [Message]"
-     * - "Tell [Contact] [Message]"
-     */
-    private fun processVoiceCommandString(voiceText: String) {
-        var clean = voiceText.trim()
-        Log.d(TAG, "Processing voice command: $clean")
+    // =========================================================================
+    // Advanced Closest Name & Fuzzy Contact Matching Engine
+    // Handles misrecognized / wrongly spoken names and resolves to the closest contact
+    // =========================================================================
 
-        // Notify web UI of the incoming transcript
-        runOnUiThread {
-            webView?.evaluateJavascript(
-                "if (window.handleNativeVoiceCommand) { window.handleNativeVoiceCommand('${clean.replace("'", "\\'")}'); }",
-                null
-            )
+    data class ContactRecord(val name: String, val phone: String, val relation: String = "")
+
+    data class ContactMatch(
+        val contact: ContactRecord,
+        val score: Double,
+        val editDistance: Int,
+        val matchedCandidate: String,
+        val remainderMessage: String,
+        val isExact: Boolean
+    )
+
+    private val aliasMap = mapOf(
+        "mom" to listOf("mom", "mother", "mummy", "mum", "amma", "maa", "mommy", "momma", "aai", "mataji"),
+        "dad" to listOf("dad", "father", "papa", "daddy", "dada", "appa", "pop", "pops", "pitaji", "babuji"),
+        "doctor" to listOf("doctor", "dr", "dr.", "clinic", "physician", "doc", "hospital", "dentist"),
+        "caregiver" to listOf("caregiver", "nurse", "assistant", "helper", "attendant", "carer", "guardian"),
+        "sister" to listOf("sister", "sis", "didi", "akka"),
+        "brother" to listOf("brother", "bro", "bhai", "bhaiya", "anna"),
+        "wife" to listOf("wife", "wifey", "patni", "spouse", "partner"),
+        "husband" to listOf("husband", "hubby", "pati", "spouse", "partner"),
+        "friend" to listOf("friend", "buddy", "mate", "pal", "yaar", "dost")
+    )
+
+    /**
+     * Damerau-Levenshtein distance calculation accounting for insertions,
+     * deletions, substitutions, and adjacent transpositions.
+     */
+    private fun damerauLevenshtein(s1: String, s2: String): Int {
+        val len1 = s1.length
+        val len2 = s2.length
+        if (len1 == 0) return len2
+        if (len2 == 0) return len1
+
+        val d = Array(len1 + 1) { IntArray(len2 + 1) }
+        for (i in 0..len1) d[i][0] = i
+        for (j in 0..len2) d[0][j] = j
+
+        for (i in 1..len1) {
+            for (j in 1..len2) {
+                val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
+                d[i][j] = minOf(
+                    d[i - 1][j] + 1,       // deletion
+                    d[i][j - 1] + 1,       // insertion
+                    d[i - 1][j - 1] + cost // substitution
+                )
+                if (i > 1 && j > 1 && s1[i - 1] == s2[j - 2] && s1[i - 2] == s2[j - 1]) {
+                    d[i][j] = minOf(d[i][j], d[i - 2][j - 2] + cost) // transposition
+                }
+            }
+        }
+        return d[len1][len2]
+    }
+
+    /**
+     * Phonetic simplification transformer for speech recognition sound-alikes:
+     * maps phonetic variants ('ph'->'f', 'sh'->'s', 'ck'/'c'/'q'->'k', 'wh'/'w'->'v', etc.)
+     * and collapses duplicate letters so misrecognized speech (e.g. "Ashis" vs "Ashish", "Alec" vs "Alex") matches.
+     */
+    private fun phoneticSimplify(s: String): String {
+        var str = s.lowercase().replace("[^a-z0-9]".toRegex(), "")
+        if (str.isEmpty()) return ""
+
+        str = str.replace("ph", "f")
+            .replace("gh", "f")
+            .replace("ck", "k")
+            .replace("sh", "s")
+            .replace("ch", "c")
+            .replace("th", "t")
+            .replace("dh", "d")
+            .replace("bh", "b")
+            .replace("kh", "k")
+            .replace("jh", "j")
+            .replace("qu", "k")
+            .replace("q", "k")
+            .replace("x", "ks")
+            .replace("z", "s")
+            .replace("c(?=[eiy])".toRegex(), "s")
+            .replace("c", "k")
+            .replace("wh", "v")
+            .replace("w", "v")
+            .replace("ee", "i")
+            .replace("ea", "i")
+            .replace("oo", "u")
+            .replace("ou", "u")
+            .replace("ai", "e")
+            .replace("ay", "e")
+            .replace("ey", "e")
+            .replace("y", "i")
+
+        val sb = StringBuilder()
+        var prev = ' '
+        for (ch in str) {
+            if (ch != prev) {
+                sb.append(ch)
+                prev = ch
+            }
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Computes similarity score [0.0..1.0] and edit distance between query and target
+     */
+    private fun computeSimilarity(query: String, target: String): Pair<Double, Int> {
+        val qClean = query.lowercase().replace("[^a-z0-9]".toRegex(), "")
+        val tClean = target.lowercase().replace("[^a-z0-9]".toRegex(), "")
+
+        if (qClean.isEmpty() || tClean.isEmpty()) return Pair(0.0, 99)
+
+        // Exact match
+        if (qClean == tClean) {
+            return Pair(1.0, 0)
         }
 
-        // 1. Strip trigger prefix
+        // Substring / containment match
+        if (tClean.contains(qClean) && qClean.length >= 2) {
+            val ratio = qClean.length.toDouble() / tClean.length.toDouble()
+            return Pair(0.88 + 0.12 * ratio, 0)
+        }
+        if (qClean.contains(tClean) && tClean.length >= 2) {
+            val ratio = tClean.length.toDouble() / qClean.length.toDouble()
+            return Pair(0.85 + 0.12 * ratio, 0)
+        }
+
+        // Prefix match with length ratio bonus
+        if (tClean.startsWith(qClean) && qClean.length >= 2) {
+            val ratio = qClean.length.toDouble() / tClean.length.toDouble()
+            return Pair(0.90 + 0.10 * ratio, 0)
+        }
+        if (qClean.startsWith(tClean) && tClean.length >= 2) {
+            val ratio = tClean.length.toDouble() / qClean.length.toDouble()
+            return Pair(0.86 + 0.10 * ratio, 0)
+        }
+
+        val dist = damerauLevenshtein(qClean, tClean)
+        val maxLen = maxOf(qClean.length, tClean.length)
+        val levSim = 1.0 - (dist.toDouble() / maxLen.toDouble())
+
+        val qPhon = phoneticSimplify(qClean)
+        val tPhon = phoneticSimplify(tClean)
+        val phonSim: Double
+        if (qPhon.isNotEmpty() && qPhon == tPhon) {
+            phonSim = 1.0
+        } else {
+            val pDist = damerauLevenshtein(qPhon, tPhon)
+            val pMax = maxOf(qPhon.length, tPhon.length)
+            phonSim = if (pMax > 0) 1.0 - (pDist.toDouble() / pMax.toDouble()) else 0.0
+        }
+
+        val compositeScore = if (phonSim >= 0.88) {
+            maxOf(levSim, 0.82 + 0.18 * phonSim)
+        } else {
+            0.55 * levSim + 0.45 * phonSim
+        }
+
+        return Pair(compositeScore, dist)
+    }
+
+    /**
+     * Scores a spoken candidate query against a ContactRecord, testing against
+     * full name, first name, last name, individual words, relations, and aliases.
+     */
+    private fun scoreContact(query: String, contact: ContactRecord): Pair<Double, Int> {
+        val qClean = query.lowercase().trim()
+        val cName = contact.name.lowercase().trim()
+        val cRelation = contact.relation.lowercase().trim()
+
+        var bestScore = 0.0
+        var minDistance = 99
+
+        // Full name
+        val (fullScore, fullDist) = computeSimilarity(qClean, cName)
+        if (fullScore > bestScore) {
+            bestScore = fullScore
+            minDistance = fullDist
+        }
+
+        // First name and name tokens (e.g. "Ashish" in "Ashish Shettigar")
+        val tokens = cName.split("\\s+".toRegex()).filter { it.length >= 2 }
+        for (token in tokens) {
+            val (tScore, tDist) = computeSimilarity(qClean, token)
+            if (tScore > bestScore) {
+                bestScore = tScore
+                minDistance = tDist
+            }
+        }
+
+        // Relation
+        if (cRelation.isNotEmpty()) {
+            val (rScore, rDist) = computeSimilarity(qClean, cRelation)
+            if (rScore > bestScore) {
+                bestScore = rScore
+                minDistance = rDist
+            }
+        }
+
+        // Aliases
+        for ((_, synonyms) in aliasMap) {
+            val matchesContact = synonyms.any { s -> cName.contains(s) || (cRelation.isNotEmpty() && cRelation.contains(s)) }
+            if (matchesContact) {
+                for (syn in synonyms) {
+                    val (synScore, synDist) = computeSimilarity(qClean, syn)
+                    if (synScore > bestScore) {
+                        bestScore = synScore
+                        minDistance = synDist
+                    }
+                }
+            }
+        }
+
+        return Pair(bestScore, minDistance)
+    }
+
+    /**
+     * Finds the closest matching ContactRecord in the list for a candidate name query.
+     * Selects the highest similarity score that passes the acceptance threshold.
+     */
+    private fun findClosestContact(query: String, contacts: List<ContactRecord>): Pair<ContactRecord, Double>? {
+        if (query.isBlank() || contacts.isEmpty()) return null
+
+        var bestContact: ContactRecord? = null
+        var bestScore = 0.0
+        var bestDist = 99
+        val qLen = query.replace("[^a-zA-Z0-9]".toRegex(), "").length
+
+        for (contact in contacts) {
+            val (score, dist) = scoreContact(query, contact)
+            if (score > bestScore) {
+                bestScore = score
+                bestDist = dist
+                bestContact = contact
+            }
+        }
+
+        val contact = bestContact ?: return null
+
+        val isAcceptable = when {
+            bestScore >= 0.80 -> true
+            qLen <= 4 && bestDist <= 1 && bestScore >= 0.60 -> true // "Jon" -> "John", "Alec" -> "Alex", "Mum" -> "Mom"
+            qLen in 5..8 && bestDist <= 2 && bestScore >= 0.60 -> true // "Ashis" -> "Ashish", "Docter" -> "Doctor"
+            qLen > 8 && bestDist <= 3 && bestScore >= 0.60 -> true
+            else -> bestScore >= 0.68
+        }
+
+        return if (isAcceptable) Pair(contact, bestScore) else null
+    }
+
+    /**
+     * Resolves a voice command to the closest contact even if the name was recognized incorrectly.
+     * Evaluates delimiter forms as well as 1, 2, and 3-word candidate name spans.
+     */
+    private fun resolveVoiceCommandToClosestMatch(voiceText: String, contacts: List<ContactRecord>): ContactMatch? {
+        val clean = voiceText.trim()
         val prefixes = listOf(
-            Regex("(?i)^send\\s+(?:a\\s+)?whatsapp\\s+message\\s+to\\s+"),
-            Regex("(?i)^send\\s+(?:a\\s+)?message\\s+to\\s+"),
-            Regex("(?i)^send\\s+(?:a\\s+)?whatsapp\\s+to\\s+"),
-            Regex("(?i)^send\\s+to\\s+"),
-            Regex("(?i)^whatsapp\\s+to\\s+"),
-            Regex("(?i)^whatsapp\\s+"),
-            Regex("(?i)^message\\s+to\\s+"),
-            Regex("(?i)^tell\\s+"),
-            Regex("(?i)^text\\s+to\\s+"),
-            Regex("(?i)^text\\s+")
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?whatsapp\\s+message\\s+to\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?message\\s+to\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?whatsapp\\s+to\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?message\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?whatsapp\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+to\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:whatsapp\\s+to\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:whatsapp\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:message\\s+to\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:message\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:text\\s+to\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:text\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:tell\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:ask\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:say\\s+to\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:notify\\s+)"),
+            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:contact\\s+)")
         )
 
         var stripped = clean
@@ -661,100 +941,93 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
 
-        // 2. Fetch all contacts from phone to match against
-        val contacts = getAllContactsList()
+        if (stripped.isEmpty()) return null
 
-        var matchedContactName = ""
-        var matchedPhoneNumber = ""
-        var messageBody = ""
+        val candidates = mutableListOf<ContactMatch>()
 
-        // Sort contacts by name length descending so "Alex Smith" matches before "Alex"
-        val sortedContacts = contacts.sortedByDescending { it.name.length }
-
-        // Try direct prefix matching with known contact names
-        val lowerStripped = stripped.lowercase()
-        for (c in sortedContacts) {
-            val cLower = c.name.lowercase()
-            val firstName = cLower.split(" ").firstOrNull() ?: cLower
-
-            if (lowerStripped.startsWith(cLower)) {
-                matchedContactName = c.name
-                matchedPhoneNumber = c.phone
-                messageBody = stripped.substring(cLower.length).trim()
-                break
-            } else if (firstName.length >= 3 && lowerStripped.startsWith(firstName)) {
-                matchedContactName = c.name
-                matchedPhoneNumber = c.phone
-                messageBody = stripped.substring(firstName.length).trim()
-                break
+        // Strategy 1: Delimiter Separation (-, :, that, saying, to say, please, telling, about)
+        val delimiterRegex = Regex("(?i)^(.+?)\\s*(?:[-:]|(?:\\s+(?:that|saying|to say|please|telling|about)))\\s+(.+)$")
+        val delimMatch = delimiterRegex.find(stripped)
+        if (delimMatch != null) {
+            val query = delimMatch.groupValues[1].trim()
+            val rawBody = delimMatch.groupValues[2].trim()
+            val result = findClosestContact(query, contacts)
+            if (result != null) {
+                val cleanBody = rawBody.replace(Regex("(?i)^[-:]\\s*"), "")
+                    .replace(Regex("(?i)^(?:that|saying|to say)\\s+"), "")
+                    .replace(Regex("^[\"']|[\"']$"), "")
+                    .trim()
+                val isExact = query.equals(result.first.name, ignoreCase = true)
+                candidates.add(ContactMatch(result.first, result.second + 0.05, 0, query, cleanBody, isExact))
             }
         }
 
-        // Check common aliases (Mom, Dad, Doctor)
-        if (matchedContactName.isEmpty()) {
-            val aliasMap = mapOf(
-                "mom" to listOf("mom", "mother", "mummy", "amma", "maa"),
-                "dad" to listOf("dad", "father", "papa", "daddy", "appa"),
-                "doctor" to listOf("doctor", "dr", "dr.", "clinic")
+        // Strategy 2: N-gram word spans from beginning (1 to 3 words)
+        val words = stripped.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        val maxWordsToTry = minOf(3, words.size)
+
+        for (count in 1..maxWordsToTry) {
+            val queryCandidate = words.take(count).joinToString(" ")
+            val remainder = words.drop(count).joinToString(" ")
+            val result = findClosestContact(queryCandidate, contacts)
+            if (result != null) {
+                val cleanBody = remainder.replace(Regex("(?i)^[-:]\\s*"), "")
+                    .replace(Regex("(?i)^(?:that|saying|to say)\\s+"), "")
+                    .replace(Regex("^[\"']|[\"']$"), "")
+                    .trim()
+                val isExact = queryCandidate.equals(result.first.name, ignoreCase = true)
+                val multiWordBonus = if (count > 1 && result.first.name.contains(" ")) 0.08 else 0.0
+                candidates.add(ContactMatch(result.first, result.second + multiWordBonus, 0, queryCandidate, cleanBody, isExact))
+            }
+        }
+
+        if (candidates.isEmpty()) return null
+
+        // Return candidate with the highest similarity score
+        return candidates.maxByOrNull { it.score }
+    }
+
+    /**
+     * Intelligent Contact-Aware Voice Command Parser:
+     * Resolves voice command to closest contact name (handling recognition misspellings),
+     * extracts message body, announces spoken feedback, and dispatches via WhatsApp.
+     */
+    private fun processVoiceCommandString(voiceText: String) {
+        val clean = voiceText.trim()
+        Log.d(TAG, "Processing voice command: $clean")
+
+        // Notify web UI of the incoming transcript
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "if (window.handleNativeVoiceCommand) { window.handleNativeVoiceCommand('${clean.replace("'", "\\'")}'); }",
+                null
             )
-
-            for ((alias, candidates) in aliasMap) {
-                if (lowerStripped.startsWith(alias)) {
-                    val found = contacts.firstOrNull { c ->
-                        candidates.any { cand -> c.name.lowercase().contains(cand) }
-                    }
-                    if (found != null) {
-                        matchedContactName = found.name
-                        matchedPhoneNumber = found.phone
-                        messageBody = stripped.substring(alias.length).trim()
-                        break
-                    }
-                }
-            }
         }
 
-        // Fallback: Check for delimiter like '-' or ':' or 'that' or 'saying'
-        if (matchedContactName.isEmpty()) {
-            val delimiterRegex = Regex("(?i)^([^-:]+?)\\s*[-:]\\s*(.+)$")
-            val delimMatch = delimiterRegex.find(stripped)
-            if (delimMatch != null) {
-                val query = delimMatch.groupValues[1].trim()
-                val phone = queryPhoneNumberByName(query)
-                if (phone != null) {
-                    matchedContactName = query
-                    matchedPhoneNumber = phone
-                    messageBody = delimMatch.groupValues[2].trim()
-                }
+        val contacts = getAllContactsList()
+        val match = resolveVoiceCommandToClosestMatch(clean, contacts)
+
+        if (match != null) {
+            val matchedContact = match.contact
+            var messageBody = match.remainderMessage
+            if (messageBody.isBlank()) {
+                messageBody = "Hello, this is a voice message from VoxAssist."
             }
-        }
 
-        // Clean up messageBody (remove leading "that", "saying", "-", ":")
-        messageBody = messageBody.replace(Regex("(?i)^[-:]\\s*"), "")
-            .replace(Regex("(?i)^(?:that|saying|to say)\\s+"), "")
-            .trim()
+            if (match.isExact) {
+                speak("Sending WhatsApp message to ${matchedContact.name} automatically.")
+            } else {
+                // Name was recognized with spelling difference: matched to closest contact!
+                speak("Matched closest contact ${matchedContact.name} for ${match.matchedCandidate}. Sending WhatsApp message automatically.")
+            }
 
-        if (matchedContactName.isNotEmpty() && matchedPhoneNumber.isNotEmpty() && messageBody.isNotEmpty()) {
-            sendWhatsAppMessage(matchedPhoneNumber, messageBody, matchedContactName)
-        } else if (matchedContactName.isNotEmpty() && matchedPhoneNumber.isNotEmpty() && messageBody.isEmpty()) {
-            speak("What message would you like to send to $matchedContactName?")
+            Log.d(TAG, "Closest contact match: ${matchedContact.name} (from '${match.matchedCandidate}') with score: ${match.score}")
+            notifyBufferTelemetry("SENT", packetsReceivedCount, dataBuffer.size(), "To ${matchedContact.name}: $messageBody")
+            sendWhatsAppMessage(matchedContact.phone, messageBody, matchedContact.name)
         } else {
-            // Check if user was trying to match by delimiter
-            val delimFallback = Regex("(?i)send\\s+(?:a\\s+)?(?:whatsapp\\s+)?message\\s+to\\s+([^-:]+?)\\s*[-:]\\s*(.+)")
-            val match = delimFallback.find(clean)
-            if (match != null) {
-                val contactName = match.groupValues[1].trim()
-                val body = match.groupValues[2].trim()
-                val phoneNumber = queryPhoneNumberByName(contactName)
-                if (phoneNumber != null) {
-                    sendWhatsAppMessage(phoneNumber, body, contactName)
-                    return
-                }
-            }
             speak("Could not recognize who to send the message to. Please say: Send message to Contact Name, followed by your message.")
         }
     }
-
-    data class ContactRecord(val name: String, val phone: String)
 
     private fun getAllContactsList(): List<ContactRecord> {
         val list = mutableListOf<ContactRecord>()
@@ -770,22 +1043,41 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             cursor?.use {
                 val nameIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
                 val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val seen = HashSet<String>()
                 while (it.moveToNext()) {
                     val name = it.getString(nameIdx) ?: continue
                     val num = it.getString(numIdx) ?: continue
                     val cleanNum = num.replace("[^0-9+]".toRegex(), "")
-                    if (cleanNum.isNotEmpty()) {
-                        list.add(ContactRecord(name, cleanNum))
+                    if (cleanNum.isNotEmpty() && !seen.contains(name.lowercase())) {
+                        seen.add(name.lowercase())
+                        list.add(ContactRecord(name, cleanNum, "Phone Contact"))
                     }
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching contact list", e)
         }
+
+        // Default assistive contacts if device contacts are empty
+        if (list.isEmpty()) {
+            list.add(ContactRecord("Mom", "+919876543210", "Family"))
+            list.add(ContactRecord("Dad", "+919876543211", "Family"))
+            list.add(ContactRecord("Doctor", "+919876543212", "Medical"))
+            list.add(ContactRecord("Alex", "+919876543213", "Friend"))
+            list.add(ContactRecord("Caregiver", "+919876543214", "Caregiver"))
+        }
+
         return list
     }
 
     private fun queryPhoneNumberByName(name: String): String? {
+        val contacts = getAllContactsList()
+        val match = findClosestContact(name, contacts)
+        if (match != null) {
+            return match.first.phone
+        }
+
+        // Direct SQL fallback
         val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
         val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
         val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"

@@ -168,6 +168,23 @@
               <span class="preset-contact">Alex:</span>
               <span class="preset-msg">"I will reach the metro station..."</span>
             </button>
+            <!-- Closest Name Fuzzy Matching Scenarios (Wrongly Recognized Names) -->
+            <button class="preset-btn test-closest-btn" data-command="Send message to Ashis I am on my way see you soon" title="Tests misrecognized 'Ashis' -> resolves to closest contact 'Ashish Shettigar'">
+              <span class="preset-contact">⚡ "Ashis" &rarr; Ashish:</span>
+              <span class="preset-msg">"I am on my way..."</span>
+            </button>
+            <button class="preset-btn test-closest-btn" data-command="Send message to Alec - I will reach the metro station in ten minutes" title="Tests misrecognized 'Alec' -> resolves to closest contact 'Alex'">
+              <span class="preset-contact">⚡ "Alec" &rarr; Alex:</span>
+              <span class="preset-msg">"I will reach metro..."</span>
+            </button>
+            <button class="preset-btn test-closest-btn" data-command="Send message to Mum - Can you pick me up please" title="Tests misrecognized 'Mum' -> resolves to closest contact 'Mom'">
+              <span class="preset-contact">⚡ "Mum" &rarr; Mom:</span>
+              <span class="preset-msg">"Can you pick me up..."</span>
+            </button>
+            <button class="preset-btn test-closest-btn" data-command="Send message to Docter - Confirm appointment for tomorrow" title="Tests misrecognized 'Docter' -> resolves to closest contact 'Doctor'">
+              <span class="preset-contact">⚡ "Docter" &rarr; Doctor:</span>
+              <span class="preset-msg">"Confirm appointment..."</span>
+            </button>
           </div>
         </div>
       </section>
@@ -290,11 +307,19 @@
                 <circle cx="11" cy="11" r="8"/>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input type="text" id="contactSearchInput" placeholder="Search name, phone, or relation (e.g. Alex, Mom)..." aria-label="Search contacts">
+              <input type="text" id="contactSearchInput" placeholder="Search name, phone, or relation (e.g. Alex, Mom)..." aria-label="Search contacts" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+              <button id="voiceSearchBtn" class="voice-search-btn" title="Voice Search Contact" aria-label="Voice Search Contact">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/>
+                  <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              </button>
               <button id="clearSearchBtn" class="clear-search-btn" title="Clear search" hidden>&times;</button>
             </div>
             <div class="contacts-meta-row">
-              <span class="contacts-count" id="contactsCountBadge">5 contacts</span>
+              <span class="contacts-count" id="contactsCountBadge">6 contacts</span>
               <span class="search-hint">💡 Tap contact to auto-send</span>
             </div>
           </div>
@@ -302,6 +327,7 @@
           <!-- Contacts Category Filter Chips -->
           <div class="contact-filter-chips" id="contactFilterChips">
             <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="phone">Phone</button>
             <button class="filter-chip" data-filter="Family">Family</button>
             <button class="filter-chip" data-filter="Medical">Medical</button>
             <button class="filter-chip" data-filter="Friend">Friends</button>

@@ -531,9 +531,41 @@ body {
   color: #34d399;
 }
 
+.intent-status-badge.closest {
+  background: rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+}
+
 .intent-status-badge.failed {
   background: rgba(244, 63, 94, 0.2);
   color: #fb7185;
+}
+
+.closest-tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.closest-match-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  margin-left: 6px;
 }
 
 .timestamp {
@@ -685,6 +717,20 @@ body {
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--accent-cyan);
+}
+
+.preset-btn.test-closest-btn {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(30, 27, 75, 0.4);
+}
+
+.preset-btn.test-closest-btn:hover {
+  border-color: #fbbf24;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
+}
+
+.preset-btn.test-closest-btn .preset-contact {
+  color: #fbbf24;
 }
 
 .preset-msg {
@@ -1105,10 +1151,10 @@ body {
   background: var(--bg-primary);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);
-  padding: 8px 32px 8px 36px;
+  padding: 9px 62px 9px 36px;
   color: #fff;
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   outline: none;
   transition: var(--transition);
 }
@@ -1118,19 +1164,48 @@ body {
   box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
 }
 
-.clear-search-btn {
+.voice-search-btn {
   position: absolute;
-  right: 10px;
+  right: 32px;
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 1.15rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: var(--transition);
+}
+
+.voice-search-btn:hover {
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.15);
+}
+
+.voice-search-btn.listening {
+  color: #ef4444;
+  animation: pulse-dot 1s infinite;
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.25rem;
   cursor: pointer;
   line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: var(--transition);
 }
 
 .clear-search-btn:hover {
   color: #fff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .contacts-count {
@@ -1200,6 +1275,20 @@ body {
   font-weight: 700;
 }
 
+.closest-match-tag {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+}
+
 /* Hands-Free Auto-Send Accessibility Banner */
 .a11y-banner {
   display: flex;
@@ -1255,8 +1344,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 230px;
+  max-height: 380px;
   overflow-y: auto;
+  scroll-behavior: smooth;
+  padding-right: 4px;
 }
 
 .contact-item {
