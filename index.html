@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Assistive Voice-to-WhatsApp Companion for Blind Users - FRDM-RW612 & INMP441 Microcontroller Bluetooth Interface">
-  <title>VoxAssist - Voice to WhatsApp Assistive Companion</title>
+  <meta name="description" content="Assistive Voice-to-WhatsApp Companion for Blind Users - FRDM-MCXW71 Bluetooth BLE, Female AUX Input & Speaker Interface">
+  <title>VoxAssist - NXP FRDM-MCXW71 Voice-to-WhatsApp Assistive Gateway</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#4f46e5">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -19,36 +19,32 @@
     <header class="app-header">
       <div class="brand">
         <div class="brand-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" x2="12" y1="19" y2="22"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
             <line x1="8" x2="16" y1="22" y2="22"/>
           </svg>
         </div>
         <div>
           <h1>VoxAssist IoT</h1>
-          <p class="subtitle">Blind Assistive Voice-to-WhatsApp Gateway (FRDM-RW612 + INMP441)</p>
+          <p class="subtitle">NXP FRDM-MCXW71 Voice-to-WhatsApp Assistive Gateway</p>
         </div>
       </div>
 
-      <!-- Live Connection Pills -->
+      <!-- Header Controls & Status -->
       <div class="header-status-group">
-        <div class="status-pill connected" id="bleStatusPill">
+        <div class="status-pill connected" id="bleStatusPill" role="button" title="Click to view Connected & Nearby Bluetooth Devices in Settings">
           <span class="status-dot"></span>
-          <span class="status-label">BLE: Connected (FRDM-RW612)</span>
+          <span class="status-label" id="bleStatusPillLabel">BLE: Connected (FRDM-MCXW71)</span>
         </div>
         <div class="status-pill" id="ttsStatusPill">
           <span class="status-dot"></span>
-          <span class="status-label">TTS Audio: Active</span>
+          <span class="status-label">Speaker: Active</span>
         </div>
-        <button class="settings-btn" id="ttsVoiceToggleBtn" title="Toggle Spoken Feedback Voice">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-          </svg>
-          <span id="ttsBtnText">Spoken Feedback: ON</span>
+        <button class="settings-btn" id="themeToggleBtn" title="Toggle Light / Dark Contrast Theme">
+          <span id="themeToggleIcon">☀️</span>
+          <span id="themeToggleText">Light Theme</span>
         </button>
         <button class="settings-btn install-btn" id="installPwaBtn" title="Install VoxAssist on your Phone">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -56,315 +52,744 @@
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          <span id="installBtnText">📱 Install on Phone</span>
+          <span id="installBtnText">📱 Install App</span>
         </button>
       </div>
     </header>
 
-    <!-- Main Workspace Grid -->
-    <main class="main-layout">
-      <!-- Left Column: Core Voice Interaction & Accessibility Console -->
-      <section class="panel voice-panel" aria-labelledby="voiceConsoleHeading">
+    <!-- Segmented Tab Navigation Bar -->
+    <nav class="segmented-control" role="tablist" aria-label="Main Navigation Segments">
+      <button class="segment-tab active" data-tab="voice" role="tab" aria-selected="true" id="tabBtnVoice">
+        <span class="tab-icon">🎙️</span>
+        <span class="tab-title">Voice Assist</span>
+      </button>
+      <button class="segment-tab" data-tab="settings" role="tab" aria-selected="false" id="tabBtnSettings">
+        <span class="tab-icon">⚙️</span>
+        <span class="tab-title">Settings & Devices</span>
+        <span class="tab-counter" id="scannedCountBadge">0</span>
+      </button>
+      <button class="segment-tab" data-tab="replies" role="tab" aria-selected="false" id="tabBtnReplies">
+        <span class="tab-icon">🔔</span>
+        <span class="tab-title">WhatsApp & Speaker</span>
+        <span class="tab-indicator-dot" id="replyNotifDot" hidden></span>
+      </button>
+      <button class="segment-tab" data-tab="contacts" role="tab" aria-selected="false" id="tabBtnContacts">
+        <span class="tab-icon">👥</span>
+        <span class="tab-title">Contacts</span>
+      </button>
+      <button class="segment-tab" data-tab="hardware" role="tab" aria-selected="false" id="tabBtnHw">
+        <span class="tab-icon">🔌</span>
+        <span class="tab-title">FRDM-MCXW71 Pins</span>
+      </button>
+    </nav>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 1: Voice Assist & Push-to-Talk Engine                             -->
+    <!-- ===================================================================== -->
+    <main class="tab-view active" id="viewVoice">
+      <div class="main-layout">
+        <!-- Left Column: Core Voice Interaction & Accessibility Console -->
+        <section class="panel voice-panel" aria-labelledby="voiceConsoleHeading">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-badge primary">CORE ASSISTIVE ENGINE</span>
+              <h2 id="voiceConsoleHeading">Voice Interaction & PTT</h2>
+            </div>
+            <span class="assistive-hint">HotKey: Hold <kbd>SPACE</kbd></span>
+          </div>
+
+          <!-- Tactile Push-To-Talk Button -->
+          <div class="ptt-container">
+            <button id="pttButton" class="ptt-btn" aria-label="Push to Talk. Press and hold to speak your message command.">
+              <div class="ptt-ring-pulse"></div>
+              <div class="ptt-inner">
+                <svg class="mic-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" x2="12" y1="19" y2="22"/>
+                  <line x1="8" x2="16" y1="22" y2="22"/>
+                </svg>
+                <span class="ptt-text" id="pttLabel">HOLD TO SPEAK</span>
+                <span class="ptt-subtext" id="pttSubLabel">or press AUX switch on FRDM board</span>
+              </div>
+            </button>
+          </div>
+
+          <!-- Live Audio Waveform Canvas -->
+          <div class="waveform-card">
+            <div class="waveform-header">
+              <span>AUX In / Microphone Audio PCM Waveform (16kHz / 16-bit Mono)</span>
+              <span class="level-indicator" id="micLevelLabel">0 dB</span>
+            </div>
+            <canvas id="waveformCanvas" width="540" height="90"></canvas>
+          </div>
+
+          <!-- Live Transcription & NLP Parser Box -->
+          <div class="transcription-card">
+            <div class="card-label-row">
+              <span class="card-label">SPEECH TRANSCRIPT</span>
+              <span class="format-rule">Format: "Send message to [Contact] - [Message]"</span>
+            </div>
+            <div class="transcript-display" id="transcriptDisplay" role="status" aria-live="polite">
+              <p class="placeholder-text">Press and hold button or speak through AUX connector...</p>
+            </div>
+          </div>
+
+          <!-- Parsed Intent Result Card -->
+          <div class="intent-card" id="intentCard">
+            <div class="intent-header">
+              <span class="intent-status-badge" id="intentStatusBadge">PARSER IDLE</span>
+              <span class="timestamp" id="intentTime">--:--:--</span>
+            </div>
+            <div class="intent-grid">
+              <div class="intent-item">
+                <span class="intent-label">RECIPIENT CONTACT</span>
+                <div class="intent-value" id="intentContact">—</div>
+              </div>
+              <div class="intent-item">
+                <span class="intent-label">RESOLVED PHONE NUMBER</span>
+                <div class="intent-value number" id="intentPhone">—</div>
+              </div>
+              <div class="intent-item full-width">
+                <span class="intent-label">EXTRACTED MESSAGE BODY</span>
+                <div class="intent-value message" id="intentMessage">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Spoken Feedback Announcement Banner -->
+          <div class="speech-announcement-card" id="announcementCard">
+            <div class="audio-feedback-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+            </div>
+            <div class="speech-text-wrap">
+              <span class="speech-label">SPOKEN FEEDBACK TO BLIND USER (TTS & BOARD SPEAKER):</span>
+              <p class="speech-content" id="speechFeedbackText">"System ready. Press and hold to speak."</p>
+            </div>
+          </div>
+
+          <!-- Preset Voice Scenarios -->
+          <div class="presets-section">
+            <div class="presets-header">
+              <span>QUICK PRESET VOICE COMMANDS (Click to simulate speaking):</span>
+            </div>
+            <div class="presets-grid">
+              <button class="preset-btn" data-command="Send message to Mom - I am outside the clinic, please pick me up">
+                <span class="preset-contact">Mom:</span>
+                <span class="preset-msg">"I am outside clinic..."</span>
+              </button>
+              <button class="preset-btn" data-command="Send message to Dad - Can you call me back when you are free">
+                <span class="preset-contact">Dad:</span>
+                <span class="preset-msg">"Can you call me back..."</span>
+              </button>
+              <button class="preset-btn" data-command="Send message to Doctor - Can we confirm my appointment for tomorrow">
+                <span class="preset-contact">Doctor:</span>
+                <span class="preset-msg">"Confirm appointment..."</span>
+              </button>
+              <button class="preset-btn test-closest-btn" data-command="Send message to Ashis I am on my way see you soon" title="Tests misrecognized 'Ashis' -> resolves to closest contact 'Ashish Shettigar'">
+                <span class="preset-contact">⚡ "Ashis" &rarr; Ashish:</span>
+                <span class="preset-msg">"I am on my way..."</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Right Side: Mini Summary Cards -->
+        <section class="side-layout">
+          <!-- Active MCU Connection Card -->
+          <div class="panel hardware-panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <span class="panel-badge cyan">BLUETOOTH LINK</span>
+                <h2>FRDM-MCXW71 Link</h2>
+              </div>
+              <button class="small-outline-btn" id="quickOpenBleTabBtn">Settings & Devices</button>
+            </div>
+            <div class="hw-spec-grid">
+              <div class="spec-card">
+                <span class="spec-label">Target Board</span>
+                <span class="spec-value">NXP FRDM-MCXW71</span>
+              </div>
+              <div class="spec-card">
+                <span class="spec-label">Audio Input</span>
+                <span class="spec-value">Female 3.5mm AUX (ADC0)</span>
+              </div>
+              <div class="spec-card">
+                <span class="spec-label">Audio Output</span>
+                <span class="spec-value">PWM Speaker (PTB1)</span>
+              </div>
+              <div class="spec-card">
+                <span class="spec-label">Link Status</span>
+                <span class="spec-value highlight" id="quickBleStateLabel">Connected (-42 dBm)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick WhatsApp Outbox -->
+          <div class="panel outbox-panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <span class="panel-badge emerald">RECENT ACTIVITY</span>
+                <h2>Recent WhatsApp Dispatches</h2>
+              </div>
+              <button class="clear-btn" id="clearOutboxBtn">Clear</button>
+            </div>
+            <div class="outbox-list" id="outboxList">
+              <p class="empty-state">No WhatsApp messages dispatched yet. Trigger a voice command on the left.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 2: Settings & Connected Devices Section                           -->
+    <!-- ===================================================================== -->
+    <section class="tab-view" id="viewSettings" aria-labelledby="settingsHeading">
+      <div class="settings-layout">
+        <!-- Section Header -->
+        <div class="settings-top-bar">
+          <div>
+            <span class="panel-badge primary">SYSTEM CONFIGURATION</span>
+            <h2 id="settingsHeading">Settings & Connected Devices</h2>
+            <p class="settings-subtitle">Manage microcontroller Bluetooth links, nearby peripherals, speech options, and accessibility gateways.</p>
+          </div>
+          <div class="settings-top-actions">
+            <button class="btn-scan" id="startScanBtn">
+              <span class="scan-radar-icon" id="scanRadarIcon"></span>
+              <span id="scanBtnText">🔍 Scan Nearby Devices</span>
+            </button>
+            <button class="btn-secondary-sm" id="stopScanBtn">⏹ Stop</button>
+          </div>
+        </div>
+
+        <!-- 1. Connected Devices Section (Active MCU) -->
+        <div class="settings-card highlight-card">
+          <div class="settings-card-header">
+            <div class="card-title-group">
+              <div class="icon-circle success">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                  <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                  <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                  <line x1="12" y1="20" x2="12.01" y2="20"/>
+                </svg>
+              </div>
+              <div>
+                <h3>Connected Microcontroller</h3>
+                <p class="card-desc">Active Bluetooth Low Energy (BLE 5.3) GATT connection for AUX audio & speaker</p>
+              </div>
+            </div>
+            <span class="connection-live-pill" id="mcuLivePill">● Connected (GATT Ready)</span>
+          </div>
+
+          <!-- Connected Device Specs Grid -->
+          <div class="connected-specs-grid">
+            <div class="conn-spec-box">
+              <span class="conn-spec-label">Device Name</span>
+              <span class="conn-spec-val" id="connectedNameDisplay">FRDM-MCXW71-VOX</span>
+            </div>
+            <div class="conn-spec-box">
+              <span class="conn-spec-label">MAC Address</span>
+              <span class="conn-spec-val mono">00:04:9F:8A:2B:10</span>
+            </div>
+            <div class="conn-spec-box">
+              <span class="conn-spec-label">Negotiated MTU</span>
+              <span class="conn-spec-val mono">512 Bytes</span>
+            </div>
+            <div class="conn-spec-box">
+              <span class="conn-spec-label">Signal Strength</span>
+              <span class="conn-spec-val highlight" id="mcuRssiDisplay">-42 dBm (Excellent)</span>
+            </div>
+          </div>
+
+          <!-- Connected Device Action Bar -->
+          <div class="connected-actions-row">
+            <button class="btn-outline-primary" id="pingSpeakerBtn">🔊 Ping Board Speaker</button>
+            <button class="btn-outline-primary" id="reconnectMcuBtn">⚡ Quick Reconnect</button>
+            <button class="btn-outline-danger" id="disconnectBleBtn">Disconnect</button>
+          </div>
+        </div>
+
+        <!-- 2. Nearby Bluetooth Devices Section -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="card-title-group">
+              <div class="icon-circle primary">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="2" y1="12" x2="22" y2="12"/>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+              </div>
+              <div>
+                <h3>Nearby Bluetooth Devices</h3>
+                <p class="card-desc">All wireless peripherals and microcontrollers discovered in your area (<span id="devicesListCount">0</span> found)</p>
+              </div>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="nearby-filter-group">
+              <button class="filter-chip active" id="filterAllDevices">All Devices</button>
+              <button class="filter-chip" id="filterTargetMcu">FRDM Microcontrollers Only</button>
+              <button class="web-ble-pair-btn" id="webBlePairBtn" title="Use Chrome Web Bluetooth API dialog">🌐 Web BLE Dialog</button>
+            </div>
+          </div>
+
+          <!-- Nearby Devices Dynamic Grid -->
+          <div class="devices-grid" id="devicesGrid">
+            <!-- Populated dynamically via app.js -->
+          </div>
+        </div>
+
+        <!-- 3. Audio, Voice & Accessibility Settings -->
+        <div class="settings-grid-two-col">
+          <!-- Voice & Speech Configuration -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="card-title-group">
+                <div class="icon-circle purple">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3>Voice & Audio Output</h3>
+                  <p class="card-desc">Accessibility spoken feedback options</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="setting-item-row">
+                <div>
+                  <strong>Spoken TTS Feedback</strong>
+                  <p class="setting-hint">Speaks all confirmations and errors aloud for blind users</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="voiceFeedbackToggle" checked>
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="setting-item-row">
+                <div>
+                  <strong>Speech Rate</strong>
+                  <p class="setting-hint">Speed of spoken voice announcements</p>
+                </div>
+                <select id="speechRateSelect" class="form-select">
+                  <option value="0.85">Slow (0.85x)</option>
+                  <option value="1.0" selected>Normal (1.0x)</option>
+                  <option value="1.2">Fast (1.2x)</option>
+                  <option value="1.4">Very Fast (1.4x)</option>
+                </select>
+              </div>
+
+              <div class="setting-item-row">
+                <div>
+                  <strong>Microcontroller Speaker Tones</strong>
+                  <p class="setting-hint">Acoustic chime melodies on PTB1 (Arduino D3)</p>
+                </div>
+                <button class="btn-secondary-sm" id="testSpkChimeSettingsBtn">Play Test Tone</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- WhatsApp Automation Gateways -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="card-title-group">
+                <div class="icon-circle emerald">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3>WhatsApp Assistive Services</h3>
+                  <p class="card-desc">Zero-touch auto-sending and reply interception</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="setting-item-row">
+                <div>
+                  <strong>Hands-Free Auto-Send</strong>
+                  <p class="setting-hint">Clicks "Send" in WhatsApp without touching screen</p>
+                </div>
+                <button class="btn-secondary-sm" id="openA11ySettingsBtn">Configure Access</button>
+              </div>
+
+              <div class="setting-item-row">
+                <div>
+                  <strong>WhatsApp Notification Listener</strong>
+                  <p class="setting-hint">Announces incoming WhatsApp messages through speaker</p>
+                </div>
+                <button class="btn-secondary-sm" id="openNotifSettingsBtn">Configure Access</button>
+              </div>
+
+              <div class="setting-item-row">
+                <div>
+                  <strong>Interactive Query Readout</strong>
+                  <p class="setting-hint">Reads reply when you say "What is the reply"</p>
+                </div>
+                <span class="status-badge success">Active ✓</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Live Protocol Stream Log -->
+        <div class="ble-terminal-wrap">
+          <div class="terminal-header">
+            <span>COMMUNICATION PROTOCOL & TELEMETRY LOG</span>
+            <span class="tx-badge" id="txPktCount">TX: 0 pkts</span>
+          </div>
+          <div class="terminal-output" id="blePacketLog">
+            <div class="log-line sys">[BLE] Initializing BLE Manager & GATT client...</div>
+            <div class="log-line sys">[GATT] Target Service: 0000FFF0-0000-1000-8000-00805F9B34FB</div>
+            <div class="log-line success">[BLE] Connected to FRDM-MCXW71-VOX (RSSI: -42 dBm, MTU: 512).</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 3: WhatsApp Replies & Interactive Speaker Audio Feedback          -->
+    <!-- ===================================================================== -->
+    <section class="tab-view" id="viewReplies" aria-labelledby="repliesHeading">
+      <div class="main-layout">
+        <!-- Left: Incoming WhatsApp Replies Feed -->
+        <section class="panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-badge emerald">WHATSAPP NOTIFICATIONS</span>
+              <h2 id="repliesHeading">Incoming Messages & Speaker</h2>
+            </div>
+            <button class="small-outline-btn" id="simulateReplyMomBtn">+ Test Reply from Mom</button>
+          </div>
+
+          <!-- Notification Listener Service Status Banner -->
+          <div class="notif-listener-banner" id="notifListenerBanner">
+            <div class="notif-icon">🔔</div>
+            <div class="notif-text">
+              <strong>WhatsApp Notification Listener:</strong>
+              <span id="notifStatusDesc">Intercepts incoming WhatsApp replies and announces them via speaker.</span>
+            </div>
+            <button class="enable-notif-btn" id="enableNotifBtn">Enable Access</button>
+          </div>
+
+          <!-- Interactive Voice Query Test Hero -->
+          <div class="voice-query-hero">
+            <div class="query-hero-header">
+              <span class="hero-badge">INTERACTIVE VOICE QUERY</span>
+              <h3>Ask: "Read out" or "What is the reply"</h3>
+            </div>
+            <p class="query-explainer">
+              When someone sends you a message on WhatsApp, VoxAssist announces: <em>"New message from [Contact]"</em> through the phone and microcontroller speaker. You can then ask:
+            </p>
+            <div class="query-chips-row">
+              <button class="query-test-chip" data-query="What is the reply">🗣️ "What is the reply?"</button>
+              <button class="query-test-chip" data-query="Read out">🗣️ "Read out"</button>
+              <button class="query-test-chip" data-query="Read the reply from WhatsApp">🗣️ "Read the reply"</button>
+            </div>
+
+            <!-- Active Readout Display Box -->
+            <div class="readout-box" id="readoutBox">
+              <div class="readout-label">LAST READOUT AUDIO STREAM:</div>
+              <div class="readout-content" id="readoutContent">"No reply queried yet. Tap a button above or speak your command."</div>
+            </div>
+          </div>
+
+          <!-- Incoming Messages List -->
+          <div class="incoming-feed-header">
+            <span>INCOMING WHATSAPP REPLIES LOG</span>
+            <span class="feed-count" id="feedCountBadge">0 replies</span>
+          </div>
+          <div class="replies-list" id="repliesList">
+            <p class="empty-state">No incoming WhatsApp replies yet. Click "+ Test Reply from Mom" above to test the speaker announcement!</p>
+          </div>
+        </section>
+
+        <!-- Right: Speaker Hardware & Notification Telemetry -->
+        <section class="side-layout">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <span class="panel-badge purple">SPEAKER SUBSYSTEM</span>
+                <h2>Audio Output (FRDM-MCXW71)</h2>
+              </div>
+            </div>
+
+            <div class="speaker-spec-card">
+              <div class="spk-diagram">
+                <div class="spk-chip">FRDM-MCXW71 (PTB1 PWM)</div>
+                <div class="spk-arrow">&rarr;</div>
+                <div class="spk-chip">PAM8403 / MAX98357A Amp</div>
+                <div class="spk-arrow">&rarr;</div>
+                <div class="spk-chip highlight">8Ω 2W Speaker</div>
+              </div>
+              <ul class="spk-features-list">
+                <li>🔊 <strong>Notification Chime:</strong> High double acoustic tone on new WhatsApp message (Opcode <code>0x10</code>)</li>
+                <li>🗣️ <strong>Spoken Readout:</strong> Reply text spoken aloud through phone TTS & streamed to board (Opcode <code>0x20</code>)</li>
+                <li>🔇 <strong>Mute Control:</strong> PTB2 pin keeps amplifier silent until audio is played, preventing hiss.</li>
+              </ul>
+            </div>
+
+            <!-- Test Speaker Tones -->
+            <div class="speaker-test-row">
+              <button class="buf-btn test-btn" id="testSpkChimeBtn">🔔 Test Notification Chime</button>
+              <button class="buf-btn flush-btn" id="testSpkReadoutBtn">📢 Test Spoken Readout</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 4: Phone Contacts & Address Book                                   -->
+    <!-- ===================================================================== -->
+    <section class="tab-view" id="viewContacts" aria-labelledby="contactsHeading">
+      <div class="panel contacts-panel">
         <div class="panel-header">
           <div class="panel-title-wrap">
-            <span class="panel-badge">CORE ASSISTIVE ENGINE</span>
-            <h2 id="voiceConsoleHeading">Voice Interaction & PTT</h2>
+            <span class="panel-badge purple">ADDRESS BOOK</span>
+            <h2 id="contactsHeading">Resolved Phone Contacts</h2>
           </div>
-          <span class="assistive-hint">HotKey: Press & Hold <kbd>SPACE</kbd></span>
+          <button class="add-contact-btn" id="openAddContactBtn">+ Add Contact</button>
         </div>
 
-        <!-- Big Tactile Push-To-Talk Button -->
-        <div class="ptt-container">
-          <button id="pttButton" class="ptt-btn" aria-label="Push to Talk. Press and hold to speak your message command.">
-            <div class="ptt-ring-pulse"></div>
-            <div class="ptt-inner">
-              <svg class="mic-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" x2="12" y1="19" y2="22"/>
-                <line x1="8" x2="16" y1="22" y2="22"/>
-              </svg>
-              <span class="ptt-text" id="pttLabel">HOLD TO SPEAK</span>
-              <span class="ptt-subtext" id="pttSubLabel">or click once to toggle</span>
-            </div>
-          </button>
-        </div>
-
-        <!-- Live Audio Waveform Canvas -->
-        <div class="waveform-card">
-          <div class="waveform-header">
-            <span>INMP441 I²S PCM Audio Waveform (16kHz / 16-bit Mono)</span>
-            <span class="level-indicator" id="micLevelLabel">0 dB</span>
-          </div>
-          <canvas id="waveformCanvas" width="540" height="90"></canvas>
-        </div>
-
-        <!-- Live Transcription & NLP Parser Box -->
-        <div class="transcription-card">
-          <div class="card-label-row">
-            <span class="card-label">SPEECH TRANSCRIPT</span>
-            <span class="format-rule">Format: "Send message to [Contact] - [Message]"</span>
-          </div>
-          <div class="transcript-display" id="transcriptDisplay" role="status" aria-live="polite">
-            <p class="placeholder-text">Press and hold the button above or use a quick test scenario below...</p>
-          </div>
-        </div>
-
-        <!-- Parsed Intent Result Card -->
-        <div class="intent-card" id="intentCard">
-          <div class="intent-header">
-            <span class="intent-status-badge" id="intentStatusBadge">PARSER IDLE</span>
-            <span class="timestamp" id="intentTime">--:--:--</span>
-          </div>
-          <div class="intent-grid">
-            <div class="intent-item">
-              <span class="intent-label">RECIPIENT CONTACT</span>
-              <div class="intent-value" id="intentContact">—</div>
-            </div>
-            <div class="intent-item">
-              <span class="intent-label">RESOLVED PHONE NUMBER</span>
-              <div class="intent-value number" id="intentPhone">—</div>
-            </div>
-            <div class="intent-item full-width">
-              <span class="intent-label">EXTRACTED MESSAGE BODY</span>
-              <div class="intent-value message" id="intentMessage">—</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Spoken Feedback Announcement Banner -->
-        <div class="speech-announcement-card" id="announcementCard">
-          <div class="audio-feedback-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        <!-- Contacts Search Bar -->
+        <div class="contacts-search-box">
+          <div class="search-input-wrapper">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
-          </div>
-          <div class="speech-text-wrap">
-            <span class="speech-label">SPOKEN FEEDBACK TO BLIND USER (TTS):</span>
-            <p class="speech-content" id="speechFeedbackText">"System ready. Press and hold to speak."</p>
-          </div>
-        </div>
-
-        <!-- One-Click Preset Test Phrases for Instant Testing -->
-        <div class="presets-section">
-          <div class="presets-header">
-            <span>QUICK PRESET VOICE COMMANDS (Click to simulate speaking):</span>
-          </div>
-          <div class="presets-grid">
-            <button class="preset-btn" data-command="Send message to Mom - I am outside the clinic, please pick me up">
-              <span class="preset-contact">Mom:</span>
-              <span class="preset-msg">"I am outside the clinic..."</span>
-            </button>
-            <button class="preset-btn" data-command="Send message to Dad - Can you call me back when you are free">
-              <span class="preset-contact">Dad:</span>
-              <span class="preset-msg">"Can you call me back..."</span>
-            </button>
-            <button class="preset-btn" data-command="Send message to Doctor - Can we confirm my appointment for tomorrow">
-              <span class="preset-contact">Doctor:</span>
-              <span class="preset-msg">"Can we confirm appointment..."</span>
-            </button>
-            <button class="preset-btn" data-command="Send message to Alex - I will reach the metro station in ten minutes">
-              <span class="preset-contact">Alex:</span>
-              <span class="preset-msg">"I will reach the metro station..."</span>
-            </button>
-            <!-- Closest Name Fuzzy Matching Scenarios (Wrongly Recognized Names) -->
-            <button class="preset-btn test-closest-btn" data-command="Send message to Ashis I am on my way see you soon" title="Tests misrecognized 'Ashis' -> resolves to closest contact 'Ashish Shettigar'">
-              <span class="preset-contact">⚡ "Ashis" &rarr; Ashish:</span>
-              <span class="preset-msg">"I am on my way..."</span>
-            </button>
-            <button class="preset-btn test-closest-btn" data-command="Send message to Alec - I will reach the metro station in ten minutes" title="Tests misrecognized 'Alec' -> resolves to closest contact 'Alex'">
-              <span class="preset-contact">⚡ "Alec" &rarr; Alex:</span>
-              <span class="preset-msg">"I will reach metro..."</span>
-            </button>
-            <button class="preset-btn test-closest-btn" data-command="Send message to Mum - Can you pick me up please" title="Tests misrecognized 'Mum' -> resolves to closest contact 'Mom'">
-              <span class="preset-contact">⚡ "Mum" &rarr; Mom:</span>
-              <span class="preset-msg">"Can you pick me up..."</span>
-            </button>
-            <button class="preset-btn test-closest-btn" data-command="Send message to Docter - Confirm appointment for tomorrow" title="Tests misrecognized 'Docter' -> resolves to closest contact 'Doctor'">
-              <span class="preset-contact">⚡ "Docter" &rarr; Doctor:</span>
-              <span class="preset-msg">"Confirm appointment..."</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Right Column: Hardware Telemetry, Contacts & SMS Outbox -->
-      <section class="side-layout">
-        <!-- Hardware State: FRDM-RW612 + INMP441 + BLE -->
-        <div class="panel hardware-panel">
-          <div class="panel-header">
-            <div class="panel-title-wrap">
-              <span class="panel-badge cyan">HARDWARE LAYER</span>
-              <h2>FRDM-RW612 & INMP441</h2>
-            </div>
-            <button class="small-outline-btn" id="reconnectBleBtn">Simulate Reconnect</button>
-          </div>
-
-          <div class="hw-spec-grid">
-            <div class="spec-card">
-              <span class="spec-label">MCU Core</span>
-              <span class="spec-value">Cortex-M33 @ 260MHz</span>
-            </div>
-            <div class="spec-card">
-              <span class="spec-label">Microphone</span>
-              <span class="spec-value">INMP441 (I²S / Flexcomm)</span>
-            </div>
-            <div class="spec-card">
-              <span class="spec-label">Audio Buffer</span>
-              <span class="spec-value">eDMA Ping-Pong (16kHz)</span>
-            </div>
-            <div class="spec-card">
-              <span class="spec-label">Bluetooth Radio</span>
-              <span class="spec-value">BLE 5.3 EdgeFast Stack</span>
-            </div>
-          </div>
-
-          <!-- Microcontroller Real-Time BLE Buffer Engine Monitor -->
-          <div class="mcu-buffer-card" id="mcuBufferCard">
-            <div class="buffer-card-header">
-              <div class="buffer-title-wrap">
-                <span class="buffer-pulse-dot" id="bufferPulseDot"></span>
-                <span class="buffer-card-title">BLE DATA BUFFER ENGINE (MCU &rarr; PHONE)</span>
-              </div>
-              <span class="buffer-status-badge idle" id="bufferStatusBadge">BUFFER IDLE</span>
-            </div>
-
-            <!-- Buffer Statistics Grid -->
-            <div class="buffer-metrics-grid">
-              <div class="buf-metric">
-                <span class="buf-metric-label">PACKETS</span>
-                <span class="buf-metric-val" id="bufPacketCount">0 pkts</span>
-              </div>
-              <div class="buf-metric">
-                <span class="buf-metric-label">BUFFER SIZE</span>
-                <span class="buf-metric-val" id="bufByteCount">0 KB</span>
-              </div>
-              <div class="buf-metric">
-                <span class="buf-metric-label">BLE STATE</span>
-                <span class="buf-metric-val highlight" id="bleStateLabel">Connected</span>
-              </div>
-              <div class="buf-metric">
-                <span class="buf-metric-label">GATT RSSI</span>
-                <span class="buf-metric-val" id="bleRssiLabel">-52 dBm</span>
-              </div>
-            </div>
-
-            <!-- Buffer Fill Level Bar -->
-            <div class="buffer-progress-wrap">
-              <div class="buffer-progress-bar" id="bufferProgressBar" style="width: 0%;"></div>
-            </div>
-
-            <!-- Live Payload Preview -->
-            <div class="buffer-preview-wrap">
-              <span class="buf-preview-label">ACCUMULATED BUFFER PAYLOAD (PCM / TEXT):</span>
-              <div class="buffer-preview-box" id="bufferPreviewBox">Buffer is empty. Waiting for PTT trigger...</div>
-            </div>
-
-            <!-- Buffer Simulation & Test Actions -->
-            <div class="buffer-actions-row">
-              <button class="buf-btn test-btn" id="simulateBlePttBtn" title="Simulate Microcontroller PTT Press, Stream, and Release">
-                <span>⚡ Test MCU Buffer Stream</span>
-              </button>
-              <button class="buf-btn flush-btn" id="flushBufferBtn" title="Immediately process and send buffered command">
-                <span>🚀 Flush & Send</span>
-              </button>
-              <button class="buf-btn clear-btn-sm" id="clearBufferBtn" title="Reset buffer memory">
-                <span>Clear</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- BLE Live Packet Stream Terminal -->
-          <div class="ble-terminal-wrap">
-            <div class="terminal-header">
-              <span>GATT NOTIFICATION PACKET LOG (AUDIO & COMMANDS)</span>
-              <span class="tx-badge" id="txPktCount">TX: 0 pkts</span>
-            </div>
-            <div class="terminal-output" id="blePacketLog">
-              <div class="log-line sys">[SYSTEM] FRDM-RW612 EdgeFast BLE Stack initialized.</div>
-              <div class="log-line sys">[GATT] Service UUID: 0000FFF0-0000-1000-8000-00805F9B34FB</div>
-              <div class="log-line sys">[GATT] Char Audio/Cmd: 0000FFF1 (Notify, Write)</div>
-              <div class="log-line success">[BLE] Paired and bonded with Android Phone (RSSI: -52 dBm)</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Phone Contact Book (Address Book) -->
-        <div class="panel contacts-panel">
-          <div class="panel-header">
-            <div class="panel-title-wrap">
-              <span class="panel-badge purple">PHONE CONTACTS</span>
-              <h2>Resolved Address Book</h2>
-            </div>
-            <button class="add-contact-btn" id="openAddContactBtn">+ Add Contact</button>
-          </div>
-
-          <!-- Contacts Search Bar -->
-          <div class="contacts-search-box">
-            <div class="search-input-wrapper">
-              <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <input type="text" id="contactSearchInput" placeholder="Search name, phone, or relation (e.g. Alex, Mom)..." aria-label="Search contacts" autocomplete="off">
+            <button id="voiceSearchBtn" class="voice-search-btn" title="Voice Search Contact">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
               </svg>
-              <input type="text" id="contactSearchInput" placeholder="Search name, phone, or relation (e.g. Alex, Mom)..." aria-label="Search contacts" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-              <button id="voiceSearchBtn" class="voice-search-btn" title="Voice Search Contact" aria-label="Voice Search Contact">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                  <line x1="12" y1="19" x2="12" y2="23"/>
-                  <line x1="8" y1="23" x2="16" y2="23"/>
-                </svg>
-              </button>
-              <button id="clearSearchBtn" class="clear-search-btn" title="Clear search" hidden>&times;</button>
-            </div>
-            <div class="contacts-meta-row">
-              <span class="contacts-count" id="contactsCountBadge">6 contacts</span>
-              <span class="search-hint">💡 Tap contact to auto-send</span>
-            </div>
+            </button>
+            <button id="clearSearchBtn" class="clear-search-btn" title="Clear search" hidden>&times;</button>
           </div>
-
-          <!-- Contacts Category Filter Chips -->
-          <div class="contact-filter-chips" id="contactFilterChips">
-            <button class="filter-chip active" data-filter="all">All</button>
-            <button class="filter-chip" data-filter="phone">Phone</button>
-            <button class="filter-chip" data-filter="Family">Family</button>
-            <button class="filter-chip" data-filter="Medical">Medical</button>
-            <button class="filter-chip" data-filter="Friend">Friends</button>
-            <button class="filter-chip" data-filter="Caregiver">Caregiver</button>
-          </div>
-
-          <!-- Hands-Free WhatsApp Auto-Send Banner -->
-          <div class="a11y-banner" id="a11yBanner">
-            <div class="a11y-icon">⚡</div>
-            <div class="a11y-text">
-              <strong>Hands-Free Auto-Send:</strong>
-              <span>Auto-clicks "Send" in WhatsApp without touching the screen.</span>
-            </div>
-            <button class="enable-a11y-btn" id="enableA11yBtn">Enable</button>
-          </div>
-
-          <div class="contacts-list" id="contactsList">
-            <!-- Dynamically populated via app.js -->
+          <div class="contacts-meta-row">
+            <span class="contacts-count" id="contactsCountBadge">6 contacts</span>
+            <span class="search-hint">💡 Tap contact to auto-send message</span>
           </div>
         </div>
 
-        <!-- Sent SMS Outbox / Message History -->
-        <div class="panel outbox-panel">
-          <div class="panel-header">
-            <div class="panel-title-wrap">
-              <span class="panel-badge emerald">DISPATCH OUTBOX</span>
-              <h2>WhatsApp Message History</h2>
-            </div>
-            <button class="clear-btn" id="clearOutboxBtn">Clear</button>
-          </div>
+        <!-- Category Filter Chips -->
+        <div class="contact-filter-chips" id="contactFilterChips">
+          <button class="filter-chip active" data-filter="all">All</button>
+          <button class="filter-chip" data-filter="Family">Family</button>
+          <button class="filter-chip" data-filter="Medical">Medical</button>
+          <button class="filter-chip" data-filter="Friend">Friends</button>
+          <button class="filter-chip" data-filter="Caregiver">Caregiver</button>
+        </div>
 
-          <div class="outbox-list" id="outboxList">
-            <p class="empty-state">No WhatsApp messages dispatched yet. Trigger a voice command above.</p>
+        <!-- Hands-Free WhatsApp Auto-Send Banner -->
+        <div class="a11y-banner" id="a11yBanner">
+          <div class="a11y-icon">⚡</div>
+          <div class="a11y-text">
+            <strong>Hands-Free Auto-Send:</strong>
+            <span>Auto-clicks "Send" in WhatsApp without touching the screen.</span>
+          </div>
+          <button class="enable-a11y-btn" id="enableA11yBtn">Enable</button>
+        </div>
+
+        <div class="contacts-list" id="contactsList">
+          <!-- Dynamically populated via app.js -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 5: FRDM-MCXW71 Hardware Pinout & Wiring Specifications             -->
+    <!-- ===================================================================== -->
+    <section class="tab-view" id="viewHardware" aria-labelledby="hardwareHeading">
+      <div class="panel hardware-panel">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <span class="panel-badge cyan">HARDWARE SPECIFICATIONS</span>
+            <h2 id="hardwareHeading">NXP FRDM-MCXW71 Pin Connections</h2>
           </div>
         </div>
-      </section>
-    </main>
+
+        <!-- Pinout Table: Female 3.5mm AUX Connector -->
+        <div class="pinout-section">
+          <h3>1. Female 3.5mm AUX Connector Interfacing (Audio In & Push-to-Talk)</h3>
+          <p class="pinout-desc">
+            Connects standard 3.5mm TRS / TRRS audio cables or external microphones to the FRDM-MCXW71 board:
+          </p>
+          <div class="table-responsive">
+            <table class="pinout-table">
+              <thead>
+                <tr>
+                  <th>AUX Connector Pin</th>
+                  <th>Signal Function</th>
+                  <th>FRDM-MCXW71 Pin</th>
+                  <th>Arduino Header</th>
+                  <th>Circuit Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Tip</strong></td>
+                  <td>Audio Left / Mono In</td>
+                  <td><strong>PTA16</strong></td>
+                  <td><strong>A0</strong></td>
+                  <td>LPADC0 Channel 0 (AC-coupled via 10µF cap, 10k/10k bias to 3.3V)</td>
+                </tr>
+                <tr>
+                  <td><strong>Ring 1</strong></td>
+                  <td>Audio Right / Jack Detect</td>
+                  <td><strong>PTA21</strong></td>
+                  <td><strong>D2</strong></td>
+                  <td>GPIO Digital Input with internal pull-up (detects cable insertion)</td>
+                </tr>
+                <tr>
+                  <td><strong>Ring 2</strong></td>
+                  <td>Ground</td>
+                  <td><strong>GND</strong></td>
+                  <td><strong>GND</strong></td>
+                  <td>Common Analog & Digital Ground reference</td>
+                </tr>
+                <tr>
+                  <td><strong>Sleeve</strong></td>
+                  <td>Mic / Inline PTT Button</td>
+                  <td><strong>PTB0</strong></td>
+                  <td><strong>D4</strong></td>
+                  <td>GPIO Digital Input with internal pull-up (Active LOW on button press)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Pinout Table: Speaker Subsystem -->
+        <div class="pinout-section" style="margin-top: 24px;">
+          <h3>2. Speaker & Audio Output Interfacing</h3>
+          <p class="pinout-desc">
+            Drives an 8Ω 1W-2W speaker via PAM8403 Class-D amplifier or MAX98357A I2S amplifier:
+          </p>
+          <div class="table-responsive">
+            <table class="pinout-table">
+              <thead>
+                <tr>
+                  <th>Component Pin</th>
+                  <th>Signal Function</th>
+                  <th>FRDM-MCXW71 Pin</th>
+                  <th>Arduino Header</th>
+                  <th>Circuit Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Amp Audio IN+</strong></td>
+                  <td>PWM Audio Output</td>
+                  <td><strong>PTB1</strong></td>
+                  <td><strong>D3</strong></td>
+                  <td>CTIMER0 PWM Match 1 output (through 1kΩ + 10nF RC low-pass filter)</td>
+                </tr>
+                <tr>
+                  <td><strong>Amp SHDN / Mute</strong></td>
+                  <td>Amplifier Mute</td>
+                  <td><strong>PTB2</strong></td>
+                  <td><strong>D5</strong></td>
+                  <td>GPIO Output (High = Active / Unmute, Low = Shutdown / Anti-pop)</td>
+                </tr>
+                <tr>
+                  <td><strong>Amp VDD</strong></td>
+                  <td>Power Supply (5V / 3.3V)</td>
+                  <td><strong>5V / 3.3V</strong></td>
+                  <td><strong>5V / 3.3V</strong></td>
+                  <td>Direct power rail from FRDM board header</td>
+                </tr>
+                <tr>
+                  <td><strong>Amp GND</strong></td>
+                  <td>Ground</td>
+                  <td><strong>GND</strong></td>
+                  <td><strong>GND</strong></td>
+                  <td>Common Ground</td>
+                </tr>
+                <tr>
+                  <td><strong>Speaker (+ / -)</strong></td>
+                  <td>Speaker Differential</td>
+                  <td><strong>SPK+ / SPK-</strong></td>
+                  <td><strong>—</strong></td>
+                  <td>Connected across PAM8403 output terminals to 8Ω speaker</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- MCU Live Buffer Telemetry Card -->
+        <div class="mcu-buffer-card" id="mcuBufferCard" style="margin-top: 24px;">
+          <div class="buffer-card-header">
+            <div class="buffer-title-wrap">
+              <span class="buffer-pulse-dot" id="bufferPulseDot"></span>
+              <span class="buffer-card-title">BLE DATA BUFFER ENGINE (FRDM-MCXW71 &rarr; PHONE)</span>
+            </div>
+            <span class="buffer-status-badge idle" id="bufferStatusBadge">BUFFER IDLE</span>
+          </div>
+
+          <!-- Buffer Metrics Grid -->
+          <div class="buffer-metrics-grid">
+            <div class="buf-metric">
+              <span class="buf-metric-label">PACKETS</span>
+              <span class="buf-metric-val" id="bufPacketCount">0 pkts</span>
+            </div>
+            <div class="buf-metric">
+              <span class="buf-metric-label">BUFFER SIZE</span>
+              <span class="buf-metric-val" id="bufByteCount">0 KB</span>
+            </div>
+            <div class="buf-metric">
+              <span class="buf-metric-label">BLE LINK</span>
+              <span class="buf-metric-val highlight" id="bleStateLabel">Connected</span>
+            </div>
+            <div class="buf-metric">
+              <span class="buf-metric-label">GATT RSSI</span>
+              <span class="buf-metric-val" id="bleRssiLabel">-42 dBm</span>
+            </div>
+          </div>
+
+          <!-- Buffer Progress Bar -->
+          <div class="buffer-progress-wrap">
+            <div class="buffer-progress-bar" id="bufferProgressBar" style="width: 0%;"></div>
+          </div>
+
+          <!-- Payload Preview -->
+          <div class="buffer-preview-wrap">
+            <span class="buf-preview-label">ACCUMULATED BUFFER PAYLOAD (PCM / TEXT):</span>
+            <div class="buffer-preview-box" id="bufferPreviewBox">Buffer is empty. Waiting for AUX PTT trigger...</div>
+          </div>
+
+          <!-- Actions -->
+          <div class="buffer-actions-row">
+            <button class="buf-btn test-btn" id="simulateBlePttBtn">
+              <span>⚡ Test AUX Voice Stream</span>
+            </button>
+            <button class="buf-btn flush-btn" id="flushBufferBtn">
+              <span>🚀 Flush & Send</span>
+            </button>
+            <button class="buf-btn clear-btn-sm" id="clearBufferBtn">
+              <span>Clear</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- Modal: Add New Contact -->
     <div class="modal-backdrop" id="contactModalBackdrop" hidden>

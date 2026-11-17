@@ -7,10 +7,12 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.ParcelUuid
 import android.provider.ContactsContract
@@ -35,13 +37,17 @@ import java.io.ByteArrayOutputStream
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * VoxAssist Android Companion App
- * - Establishes BLE connection with NXP FRDM-RW612 microcontroller
- * - Streams and buffers voice/audio data from INMP441 until PTT release
- * - Processes buffered voice command and automatically dispatches to WhatsApp contact
- * - Automatically clicks "Send" via WhatsAppAccessibilityService (Zero Clicks)
+ * - Discovers, connects, and bonds with NXP FRDM-MCXW71 microcontroller over BLE 5.3
+ * - Displays all available Bluetooth devices in a dedicated selectable segment
+ * - Receives audio data from FRDM-MCXW71 female AUX connector and dispatches to WhatsApp
+ * - Automatically sends WhatsApp messages via WhatsAppAccessibilityService (Zero Clicks)
+ * - Intercepts incoming WhatsApp notifications via VoxNotificationListenerService
+ * - Announces incoming notifications ("New message from [Contact]") via phone and board speaker
+ * - Handles interactive voice queries ("Read out" / "What is the reply") to read messages aloud
  */
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
@@ -53,10 +59,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var webView: WebView? = null
     private var isScanning = false
 
-    // Target GATT UUIDs for FRDM-RW612 EdgeFast BLE Service
+    // Target GATT UUIDs for NXP FRDM-MCXW71 Custom Assistive Service
     private val SERVICE_UUID = UUID.fromString("0000FFF0-0000-1000-8000-00805F9B34FB")
-    private val CHAR_AUDIO_CMD_UUID = UUID.fromString("0000FFF1-0000-1000-8000-00805F9B34FB")
-    private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+    private val CHAR_AUDIO_TX_UUID = UUID.fromString("0000FFF1-0000-1000-8000-00805F9B34FB") // MCU -> Phone (Notify)
+    private val CHAR_AUDIO_RX_UUID = UUID.fromString("0000FFF2-0000-1000-8000-00805F9B34FB") // Phone -> MCU Speaker (Write)
+    private val CHAR_STATUS_UUID   = UUID.fromString("0000FFF3-0000-1000-8000-00805F9B34FB") // Status
+    private val CCCD_UUID          = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+    // Scanned Bluetooth Devices Registry
+    data class ScannedBleDevice(
+        val name: String,
+        val address: String,
+        var rssi: Int,
+        val isTargetMcu: Boolean,
+        val serviceUuid: String? = null
+    )
+
+    private val scannedDevices = ConcurrentHashMap<String, ScannedBleDevice>()
 
     // =========================================================================
     // Microcontroller Audio & Command Buffer
@@ -66,9 +85,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var packetsReceivedCount = 0
 
     // Framing opcodes
-    private val OPCODE_START: Byte = 0x01 // Microcontroller PTT Button Pressed
-    private val OPCODE_DATA: Byte  = 0x02 // Streaming Data Chunk (Audio/PCM/Text)
-    private val OPCODE_END: Byte   = 0x03 // Microcontroller PTT Button Released (Flush)
+    private val OPCODE_START: Byte        = 0x01 // PTT Button Pressed / AUX Audio Start
+    private val OPCODE_DATA: Byte         = 0x02 // Streaming PCM Audio / Text Chunks
+    private val OPCODE_END: Byte          = 0x03 // PTT Button Released / Audio End (Flush)
+    private val OPCODE_NOTIF_ALERT: Byte  = 0x10 // Alert board speaker: "New message from <contact>"
+    private val OPCODE_READOUT_REPLY: Byte = 0x20 // Stream reply body to board speaker
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,6 +102,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         checkAndRequestPermissions()
         initSpeechRecognizer()
         initBluetooth()
+        initNotificationListenerHook()
+    }
+
+    private fun initNotificationListenerHook() {
+        VoxNotificationListenerService.onMessageReceivedListener = { sender, message ->
+            runOnUiThread {
+                handleIncomingWhatsAppNotification(sender, message)
+            }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
@@ -105,7 +135,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     super.onPageFinished(view, url)
                     syncContactsToWebView()
                     notifyAccessibilityStatus()
-                    notifyBleStatus("Scanning for FRDM-RW612...", false, "", 0)
+                    notifyNotificationListenerStatus()
+                    notifyBleStatus("Scanning for FRDM-MCXW71...", false, "", 0)
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -129,12 +160,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     override fun onResume() {
         super.onResume()
         notifyAccessibilityStatus()
+        notifyNotificationListenerStatus()
     }
 
     private fun notifyAccessibilityStatus() {
         val enabled = isAccessibilityServiceEnabled()
         runOnUiThread {
             webView?.evaluateJavascript("if (window.setAccessibilityStatus) { window.setAccessibilityStatus($enabled); }", null)
+        }
+    }
+
+    private fun notifyNotificationListenerStatus() {
+        val enabled = isNotificationListenerEnabled()
+        runOnUiThread {
+            webView?.evaluateJavascript("if (window.setNotificationListenerStatus) { window.setNotificationListenerStatus($enabled); }", null)
         }
     }
 
@@ -157,6 +196,29 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun broadcastScannedDevices() {
+        val jsonArray = JSONArray()
+        for (dev in scannedDevices.values) {
+            val obj = JSONObject()
+            obj.put("name", dev.name)
+            obj.put("address", dev.address)
+            obj.put("rssi", dev.rssi)
+            obj.put("isTargetMcu", dev.isTargetMcu)
+            if (dev.serviceUuid != null) {
+                obj.put("serviceUuid", dev.serviceUuid)
+            }
+            jsonArray.put(obj)
+        }
+        val rawJson = jsonArray.toString()
+        val base64 = android.util.Base64.encodeToString(rawJson.toByteArray(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP)
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "if (window.updateScannedDevices) { try { window.updateScannedDevices(decodeURIComponent(escape(atob('$base64')))); } catch(e){} }",
+                null
+            )
+        }
+    }
+
     private fun isAccessibilityServiceEnabled(): Boolean {
         if (WhatsAppAccessibilityService.isServiceRunning) return true
         return try {
@@ -165,6 +227,19 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
             false
         }
+    }
+
+    private fun isNotificationListenerEnabled(): Boolean {
+        if (VoxNotificationListenerService.isServiceActive) return true
+        val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: return false
+        val names = flat.split(":".toRegex()).toTypedArray()
+        for (name in names) {
+            val cn = ComponentName.unflattenFromString(name)
+            if (cn != null && cn.packageName == packageName) {
+                return true
+            }
+        }
+        return false
     }
 
     fun syncContactsToWebView() {
@@ -276,9 +351,43 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         @JavascriptInterface
+        fun isNotificationListenerEnabled(): Boolean {
+            return this@MainActivity.isNotificationListenerEnabled()
+        }
+
+        @JavascriptInterface
+        fun openNotificationListenerSettings() {
+            runOnUiThread {
+                try {
+                    val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    startActivity(intent)
+                    speak("Please permit VoxAssist to read WhatsApp notifications.")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to open notification listener settings", e)
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun startBleScan() {
             runOnUiThread {
                 this@MainActivity.startBleScan()
+            }
+        }
+
+        @JavascriptInterface
+        fun stopBleScan() {
+            runOnUiThread {
+                this@MainActivity.stopScan()
+            }
+        }
+
+        @JavascriptInterface
+        fun connectToDevice(address: String) {
+            runOnUiThread {
+                this@MainActivity.connectToDeviceByAddress(address)
             }
         }
 
@@ -293,6 +402,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         fun speak(text: String) {
             runOnUiThread {
                 this@MainActivity.speak(text)
+            }
+        }
+
+        @JavascriptInterface
+        fun readLastWhatsAppReply() {
+            runOnUiThread {
+                this@MainActivity.handleVoiceQueryReadout()
+            }
+        }
+
+        @JavascriptInterface
+        fun simulateIncomingWhatsApp(sender: String, message: String) {
+            runOnUiThread {
+                this@MainActivity.handleIncomingWhatsAppNotification(sender, message)
             }
         }
 
@@ -329,7 +452,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale.US
-            speak("VoxAssist is ready. Connecting to microcontroller.")
+            speak("VoxAssist is ready. Scanning for FRDM-MCXW71 microcontroller.")
         }
     }
 
@@ -338,13 +461,24 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun checkAndRequestPermissions() {
-        val permissions = arrayOf(
+        val permissions = mutableListOf(
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            permissions.add(Manifest.permission.BLUETOOTH)
+            permissions.add(Manifest.permission.BLUETOOTH_ADMIN)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         val ungranted = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
@@ -413,7 +547,74 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // =========================================================================
-    // Bluetooth LE Connection & Data Buffering Engine
+    // Incoming WhatsApp Notification & Interactive Speaker Alert
+    // =========================================================================
+    private fun handleIncomingWhatsAppNotification(sender: String, message: String) {
+        Log.d(TAG, "WhatsApp notification received -> Sender: $sender, Msg: $message")
+
+        // 1. Spoken Announcement through Phone Speaker
+        val spokenAlert = "New message from $sender."
+        speak(spokenAlert)
+
+        // 2. Alert Microcontroller Speaker over BLE Characteristic (0xFFF2)
+        sendAlertToMcuSpeaker(OPCODE_NOTIF_ALERT, spokenAlert)
+
+        // 3. Notify WebView to display incoming reply card
+        val safeSender = sender.replace("'", "\\'")
+        val safeMsg = message.replace("'", "\\'")
+        val time = System.currentTimeMillis()
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "if (window.onIncomingWhatsAppReply) { window.onIncomingWhatsAppReply('$safeSender', '$safeMsg', $time); }",
+                null
+            )
+        }
+    }
+
+    /**
+     * Sends notification alert / reply text to FRDM-MCXW71 speaker characteristic (0xFFF2)
+     */
+    @SuppressLint("MissingPermission")
+    private fun sendAlertToMcuSpeaker(opcode: Byte, text: String) {
+        val gatt = bluetoothGatt ?: return
+        val service = gatt.getService(SERVICE_UUID) ?: return
+        val charRx = service.getCharacteristic(CHAR_AUDIO_RX_UUID) ?: return
+
+        try {
+            val textBytes = text.toByteArray(StandardCharsets.UTF_8)
+            val packet = ByteArray(minOf(textBytes.size + 1, 240))
+            packet[0] = opcode
+            System.arraycopy(textBytes, 0, packet, 1, packet.size - 1)
+
+            charRx.value = packet
+            charRx.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            gatt.writeCharacteristic(charRx)
+            Log.d(TAG, "Sent opcode 0x${String.format("%02X", opcode)} to FRDM-MCXW71 speaker")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to write to MCU speaker characteristic", e)
+        }
+    }
+
+    /**
+     * Handles user asking: "Read out" or "What is the reply"
+     */
+    private fun handleVoiceQueryReadout() {
+        val replyText = VoxNotificationListenerService.getLastReplyFormatted()
+        speak(replyText)
+
+        // Also stream to FRDM-MCXW71 board speaker
+        sendAlertToMcuSpeaker(OPCODE_READOUT_REPLY, replyText)
+
+        runOnUiThread {
+            webView?.evaluateJavascript(
+                "if (window.onReadoutTriggered) { window.onReadoutTriggered('${replyText.replace("'", "\\'")}'); }",
+                null
+            )
+        }
+    }
+
+    // =========================================================================
+    // Bluetooth LE Connection & Multi-Device Scanner Engine
     // =========================================================================
     @SuppressLint("MissingPermission")
     private fun initBluetooth() {
@@ -433,45 +634,55 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (isScanning) return
 
         isScanning = true
-        notifyBleStatus("Scanning for FRDM-RW612...", false, "", 0)
-
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(SERVICE_UUID))
-            .build()
+        scannedDevices.clear()
+        notifyBleStatus("Scanning for FRDM-MCXW71...", false, "", 0)
 
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
 
-        scanner.startScan(listOf(filter), settings, scanCallback)
-
-        // Also fallback general scan if name matches
-        scanner.startScan(object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult?) {
-                val device = result?.device ?: return
-                val name = device.name ?: ""
-                if (name.contains("FRDM", ignoreCase = true) || name.contains("RW612", ignoreCase = true) || name.contains("Vox", ignoreCase = true)) {
-                    stopScan()
-                    connectToDevice(device)
-                }
-            }
-        })
+        scanner.startScan(null, settings, generalScanCallback)
     }
 
     @SuppressLint("MissingPermission")
     private fun stopScan() {
         if (isScanning) {
             isScanning = false
-            bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback)
+            bluetoothAdapter?.bluetoothLeScanner?.stopScan(generalScanCallback)
         }
     }
 
-    private val scanCallback = object : ScanCallback() {
+    private val generalScanCallback = object : ScanCallback() {
         @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             val device = result?.device ?: return
-            stopScan()
-            connectToDevice(device)
+            val name = device.name ?: ""
+            val address = device.address ?: return
+            val rssi = result.rssi
+
+            val isTarget = name.contains("FRDM", ignoreCase = true) ||
+                    name.contains("MCXW71", ignoreCase = true) ||
+                    name.contains("RW612", ignoreCase = true) ||
+                    name.contains("Vox", ignoreCase = true)
+
+            val serviceUuids = result.scanRecord?.serviceUuids?.joinToString(",") { it.uuid.toString() }
+
+            val scanned = ScannedBleDevice(
+                name = if (name.isNotBlank()) name else "Unknown Device ($address)",
+                address = address,
+                rssi = rssi,
+                isTargetMcu = isTarget,
+                serviceUuid = serviceUuids
+            )
+
+            scannedDevices[address] = scanned
+            broadcastScannedDevices()
+
+            // If we find our designated target FRDM-MCXW71-VOX and not connected yet, auto connect!
+            if (name.equals("FRDM-MCXW71-VOX", ignoreCase = true) && bluetoothGatt == null) {
+                stopScan()
+                connectToDevice(device)
+            }
         }
 
         override fun onScanFailed(errorCode: Int) {
@@ -481,9 +692,24 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     @SuppressLint("MissingPermission")
+    private fun connectToDeviceByAddress(address: String) {
+        val device = bluetoothAdapter?.getRemoteDevice(address)
+        if (device != null) {
+            stopScan()
+            connectToDevice(device)
+        } else {
+            Toast.makeText(this, "Device not found for address $address", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    @SuppressLint("MissingPermission")
     private fun connectToDevice(device: BluetoothDevice) {
-        val deviceName = device.name ?: "FRDM-RW612-VOX"
+        val deviceName = device.name ?: "FRDM-MCXW71-VOX"
         notifyBleStatus("Connecting to $deviceName...", false, deviceName, 0)
+
+        // Close previous connection if exists
+        bluetoothGatt?.disconnect()
+        bluetoothGatt?.close()
 
         bluetoothGatt = device.connectGatt(this, false, object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
@@ -491,9 +717,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     // Request high MTU for audio streaming throughput
                     gatt?.requestMtu(512)
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    notifyBleStatus("Disconnected. Retrying scan...", false, "", 0)
+                    notifyBleStatus("Disconnected. Tap to scan...", false, "", 0)
                     runOnUiThread { speak("Microcontroller disconnected.") }
-                    startBleScan()
+                    bluetoothGatt?.close()
+                    bluetoothGatt = null
                 }
             }
 
@@ -506,29 +733,26 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     val service = gatt?.getService(SERVICE_UUID)
-                    val characteristic = service?.getCharacteristic(CHAR_AUDIO_CMD_UUID)
+                    val charTx = service?.getCharacteristic(CHAR_AUDIO_TX_UUID)
 
-                    if (characteristic != null) {
+                    if (charTx != null) {
                         // 1. Enable local notification
-                        gatt.setCharacteristicNotification(characteristic, true)
+                        gatt.setCharacteristicNotification(charTx, true)
 
-                        // 2. Write CCCD Descriptor (Critical for Android notifications)
-                        val descriptor = characteristic.getDescriptor(CCCD_UUID)
+                        // 2. Write CCCD Descriptor
+                        val descriptor = charTx.getDescriptor(CCCD_UUID)
                         if (descriptor != null) {
                             descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                             gatt.writeDescriptor(descriptor)
                         }
 
-                        val name = gatt.device.name ?: "FRDM-RW612"
-                        notifyBleStatus("Connected ($name)", true, name, -45)
-                        runOnUiThread { speak("Microcontroller connected. Ready for voice commands.") }
+                        val name = gatt.device.name ?: "FRDM-MCXW71"
+                        notifyBleStatus("Connected ($name)", true, name, -42)
+                        runOnUiThread { speak("Connected to $name. AUX microphone and speaker ready.") }
                     }
                 }
             }
 
-            // =================================================================
-            // INCOMING PACKET RECEPTION & BUFFERING
-            // =================================================================
             @Deprecated("Deprecated in Java")
             override fun onCharacteristicChanged(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
                 val data = characteristic?.value ?: return
@@ -547,9 +771,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     /**
      * Handles incoming packets from the microcontroller:
-     * - [0x01] = START: PTT Button Pressed. Clear buffer, begin accumulating.
-     * - [0x02, ...] = DATA: Chunk of voice audio/text. Append to buffer.
-     * - [0x03] = END: PTT Button Released. Flush buffer and dispatch to WhatsApp!
+     * - [0x01] = START: AUX PTT Button Pressed. Clear buffer, begin accumulating.
+     * - [0x02, ...] = DATA: Chunk of voice audio/text from AUX ADC. Append to buffer.
+     * - [0x03] = END: AUX PTT Released. Flush buffer and dispatch to WhatsApp!
      */
     private fun handleIncomingBlePacket(packet: ByteArray) {
         if (packet.isEmpty()) return
@@ -558,29 +782,26 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         when (opcode) {
             OPCODE_START -> {
-                // Microcontroller started recording
                 dataBuffer.reset()
                 isBuffering = true
                 packetsReceivedCount = 0
-                notifyBufferTelemetry("RECORDING", 0, 0, "Microcontroller PTT Pressed")
+                notifyBufferTelemetry("RECORDING", 0, 0, "FRDM-MCXW71 AUX Mic Triggered")
                 runOnUiThread {
-                    speak("Listening from microcontroller...")
+                    speak("Listening from AUX microphone...")
                 }
             }
 
             OPCODE_DATA -> {
                 if (isBuffering && packet.size > 1) {
-                    // Append data payload (skipping the 1-byte opcode)
                     dataBuffer.write(packet, 1, packet.size - 1)
                     packetsReceivedCount++
                     val bytesCount = dataBuffer.size()
 
-                    // Try to generate a preview string if it's text
                     val preview = try {
                         val s = String(dataBuffer.toByteArray(), StandardCharsets.UTF_8)
-                        if (s.any { it.isLetter() }) s else "Audio PCM Data ($bytesCount bytes)"
+                        if (s.any { it.isLetter() }) s else "AUX PCM Audio ($bytesCount bytes)"
                     } catch (e: Exception) {
-                        "Audio PCM Data ($bytesCount bytes)"
+                        "AUX PCM Audio ($bytesCount bytes)"
                     }
 
                     notifyBufferTelemetry("BUFFERING", packetsReceivedCount, bytesCount, preview)
@@ -588,19 +809,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
 
             OPCODE_END -> {
-                // Microcontroller finished recording -> FLUSH & PROCESS BUFFER
                 isBuffering = false
                 val totalBytes = dataBuffer.size()
                 val bufferedBytes = dataBuffer.toByteArray()
 
-                notifyBufferTelemetry("PROCESSING", packetsReceivedCount, totalBytes, "Flushing buffer...")
-
-                // Process the complete buffered data
+                notifyBufferTelemetry("PROCESSING", packetsReceivedCount, totalBytes, "Processing AUX Voice...")
                 processBufferedPayload(bufferedBytes)
             }
 
             else -> {
-                // Handle raw text transmission (without opcode headers)
                 try {
                     val rawText = String(packet, StandardCharsets.UTF_8).trim()
                     if (rawText.isNotEmpty()) {
@@ -616,16 +833,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Processes the buffered voice/text data accumulated from the microcontroller
-     */
     private fun processBufferedPayload(bytes: ByteArray) {
         if (bytes.isEmpty()) {
             notifyBufferTelemetry("IDLE", 0, 0, "Empty buffer received")
             return
         }
 
-        // 1. Check if the microcontroller transmitted a direct UTF-8 command string
         val asString = try {
             String(bytes, StandardCharsets.UTF_8).trim()
         } catch (e: Exception) {
@@ -633,17 +846,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         val lower = asString.lowercase()
+        // Check if user is asking to read out the reply
+        if (isReplyReadoutQuery(lower)) {
+            runOnUiThread { handleVoiceQueryReadout() }
+            return
+        }
+
         if (lower.startsWith("send") || lower.startsWith("whatsapp") || lower.startsWith("tell") || lower.startsWith("message") || asString.contains("-")) {
-            // It's a text command!
             notifyBufferTelemetry("SENT", packetsReceivedCount, bytes.size, asString)
             runOnUiThread {
                 processVoiceCommandString(asString)
             }
         } else {
-            // It's raw PCM audio from INMP441!
-            notifyBufferTelemetry("PROCESSING AUDIO", packetsReceivedCount, bytes.size, "Transcribing PCM Audio (${bytes.size} bytes)...")
+            notifyBufferTelemetry("PROCESSING AUDIO", packetsReceivedCount, bytes.size, "Transcribing AUX Audio (${bytes.size} bytes)...")
             runOnUiThread {
-                // Awaken the phone's speech recognizer to transcribe the voice
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
@@ -653,11 +869,21 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    // =========================================================================
-    // Advanced Closest Name & Fuzzy Contact Matching Engine
-    // Handles misrecognized / wrongly spoken names and resolves to the closest contact
-    // =========================================================================
+    private fun isReplyReadoutQuery(text: String): Boolean {
+        val lower = text.lowercase()
+        return lower.contains("read out") ||
+                lower.contains("what is the reply") ||
+                lower.contains("read the reply") ||
+                lower.contains("read reply") ||
+                lower.contains("read message") ||
+                lower.contains("what is the message") ||
+                lower.contains("what did they say") ||
+                lower.contains("any new message")
+    }
 
+    // =========================================================================
+    // Advanced Contact Matching & NLP Parser
+    // =========================================================================
     data class ContactRecord(val name: String, val phone: String, val relation: String = "")
 
     data class ContactMatch(
@@ -681,10 +907,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         "friend" to listOf("friend", "buddy", "mate", "pal", "yaar", "dost")
     )
 
-    /**
-     * Damerau-Levenshtein distance calculation accounting for insertions,
-     * deletions, substitutions, and adjacent transpositions.
-     */
     private fun damerauLevenshtein(s1: String, s2: String): Int {
         val len1 = s1.length
         val len2 = s2.length
@@ -699,23 +921,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             for (j in 1..len2) {
                 val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
                 d[i][j] = minOf(
-                    d[i - 1][j] + 1,       // deletion
-                    d[i][j - 1] + 1,       // insertion
-                    d[i - 1][j - 1] + cost // substitution
+                    d[i - 1][j] + 1,
+                    d[i][j - 1] + 1,
+                    d[i - 1][j - 1] + cost
                 )
                 if (i > 1 && j > 1 && s1[i - 1] == s2[j - 2] && s1[i - 2] == s2[j - 1]) {
-                    d[i][j] = minOf(d[i][j], d[i - 2][j - 2] + cost) // transposition
+                    d[i][j] = minOf(d[i][j], d[i - 2][j - 2] + cost)
                 }
             }
         }
         return d[len1][len2]
     }
 
-    /**
-     * Phonetic simplification transformer for speech recognition sound-alikes:
-     * maps phonetic variants ('ph'->'f', 'sh'->'s', 'ck'/'c'/'q'->'k', 'wh'/'w'->'v', etc.)
-     * and collapses duplicate letters so misrecognized speech (e.g. "Ashis" vs "Ashish", "Alec" vs "Alex") matches.
-     */
     private fun phoneticSimplify(s: String): String {
         var str = s.lowercase().replace("[^a-z0-9]".toRegex(), "")
         if (str.isEmpty()) return ""
@@ -729,9 +946,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .replace("dh", "d")
             .replace("bh", "b")
             .replace("kh", "k")
-            .replace("jh", "j")
             .replace("qu", "k")
-            .replace("q", "k")
             .replace("x", "ks")
             .replace("z", "s")
             .replace("c(?=[eiy])".toRegex(), "s")
@@ -741,212 +956,81 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .replace("ee", "i")
             .replace("ea", "i")
             .replace("oo", "u")
-            .replace("ou", "u")
             .replace("ai", "e")
             .replace("ay", "e")
-            .replace("ey", "e")
             .replace("y", "i")
 
         val sb = StringBuilder()
-        var prev = ' '
-        for (ch in str) {
-            if (ch != prev) {
-                sb.append(ch)
-                prev = ch
+        var lastChar = ' '
+        for (c in str) {
+            if (c != lastChar) {
+                sb.append(c)
+                lastChar = c
             }
         }
         return sb.toString()
     }
 
-    /**
-     * Computes similarity score [0.0..1.0] and edit distance between query and target
-     */
-    private fun computeSimilarity(query: String, target: String): Pair<Double, Int> {
-        val qClean = query.lowercase().replace("[^a-z0-9]".toRegex(), "")
-        val tClean = target.lowercase().replace("[^a-z0-9]".toRegex(), "")
+    private fun computeContactSimilarity(spoken: String, contactName: String): Double {
+        val spClean = spoken.lowercase().trim()
+        val cClean = contactName.lowercase().trim()
 
-        if (qClean.isEmpty() || tClean.isEmpty()) return Pair(0.0, 99)
+        if (spClean == cClean) return 1.0
 
-        // Exact match
-        if (qClean == tClean) {
-            return Pair(1.0, 0)
+        for ((key, aliases) in aliasMap) {
+            val contactIsAlias = cClean == key || aliases.contains(cClean)
+            val spokenIsAlias = spClean == key || aliases.contains(spClean)
+            if (contactIsAlias && spokenIsAlias) return 0.98
         }
 
-        // Substring / containment match
-        if (tClean.contains(qClean) && qClean.length >= 2) {
-            val ratio = qClean.length.toDouble() / tClean.length.toDouble()
-            return Pair(0.88 + 0.12 * ratio, 0)
-        }
-        if (qClean.contains(tClean) && tClean.length >= 2) {
-            val ratio = tClean.length.toDouble() / qClean.length.toDouble()
-            return Pair(0.85 + 0.12 * ratio, 0)
+        if (cClean.contains(" ")) {
+            val tokens = cClean.split("\\s+".toRegex())
+            for (t in tokens) {
+                if (spClean == t) return 0.92
+            }
         }
 
-        // Prefix match with length ratio bonus
-        if (tClean.startsWith(qClean) && qClean.length >= 2) {
-            val ratio = qClean.length.toDouble() / tClean.length.toDouble()
-            return Pair(0.90 + 0.10 * ratio, 0)
-        }
-        if (qClean.startsWith(tClean) && tClean.length >= 2) {
-            val ratio = tClean.length.toDouble() / qClean.length.toDouble()
-            return Pair(0.86 + 0.10 * ratio, 0)
-        }
+        val dist = damerauLevenshtein(spClean, cClean)
+        val maxLen = maxOf(spClean.length, cClean.length)
+        if (maxLen == 0) return 0.0
 
-        val dist = damerauLevenshtein(qClean, tClean)
-        val maxLen = maxOf(qClean.length, tClean.length)
-        val levSim = 1.0 - (dist.toDouble() / maxLen.toDouble())
+        val stringSim = 1.0 - (dist.toDouble() / maxLen.toDouble())
+        val phonSp = phoneticSimplify(spClean)
+        val phonC = phoneticSimplify(cClean)
+        val phonSim = if (phonSp.isNotEmpty() && phonC.isNotEmpty()) {
+            val pDist = damerauLevenshtein(phonSp, phonC)
+            1.0 - (pDist.toDouble() / maxOf(phonSp.length, phonC.length).toDouble())
+        } else 0.0
 
-        val qPhon = phoneticSimplify(qClean)
-        val tPhon = phoneticSimplify(tClean)
-        val phonSim: Double
-        if (qPhon.isNotEmpty() && qPhon == tPhon) {
-            phonSim = 1.0
-        } else {
-            val pDist = damerauLevenshtein(qPhon, tPhon)
-            val pMax = maxOf(qPhon.length, tPhon.length)
-            phonSim = if (pMax > 0) 1.0 - (pDist.toDouble() / pMax.toDouble()) else 0.0
-        }
-
-        val compositeScore = if (phonSim >= 0.88) {
-            maxOf(levSim, 0.82 + 0.18 * phonSim)
-        } else {
-            0.55 * levSim + 0.45 * phonSim
-        }
-
-        return Pair(compositeScore, dist)
+        val combined = (stringSim * 0.45) + (phonSim * 0.55)
+        return maxOf(0.0, minOf(1.0, combined))
     }
 
-    /**
-     * Scores a spoken candidate query against a ContactRecord, testing against
-     * full name, first name, last name, individual words, relations, and aliases.
-     */
-    private fun scoreContact(query: String, contact: ContactRecord): Pair<Double, Int> {
-        val qClean = query.lowercase().trim()
-        val cName = contact.name.lowercase().trim()
-        val cRelation = contact.relation.lowercase().trim()
-
-        var bestScore = 0.0
-        var minDistance = 99
-
-        // Full name
-        val (fullScore, fullDist) = computeSimilarity(qClean, cName)
-        if (fullScore > bestScore) {
-            bestScore = fullScore
-            minDistance = fullDist
-        }
-
-        // First name and name tokens (e.g. "Ashish" in "Ashish Shettigar")
-        val tokens = cName.split("\\s+".toRegex()).filter { it.length >= 2 }
-        for (token in tokens) {
-            val (tScore, tDist) = computeSimilarity(qClean, token)
-            if (tScore > bestScore) {
-                bestScore = tScore
-                minDistance = tDist
-            }
-        }
-
-        // Relation
-        if (cRelation.isNotEmpty()) {
-            val (rScore, rDist) = computeSimilarity(qClean, cRelation)
-            if (rScore > bestScore) {
-                bestScore = rScore
-                minDistance = rDist
-            }
-        }
-
-        // Aliases
-        for ((_, synonyms) in aliasMap) {
-            val matchesContact = synonyms.any { s -> cName.contains(s) || (cRelation.isNotEmpty() && cRelation.contains(s)) }
-            if (matchesContact) {
-                for (syn in synonyms) {
-                    val (synScore, synDist) = computeSimilarity(qClean, syn)
-                    if (synScore > bestScore) {
-                        bestScore = synScore
-                        minDistance = synDist
-                    }
-                }
-            }
-        }
-
-        return Pair(bestScore, minDistance)
-    }
-
-    /**
-     * Finds the closest matching ContactRecord in the list for a candidate name query.
-     * Selects the highest similarity score that passes the acceptance threshold.
-     */
     private fun findClosestContact(query: String, contacts: List<ContactRecord>): Pair<ContactRecord, Double>? {
-        if (query.isBlank() || contacts.isEmpty()) return null
-
+        if (contacts.isEmpty() || query.isBlank()) return null
         var bestContact: ContactRecord? = null
         var bestScore = 0.0
-        var bestDist = 99
-        val qLen = query.replace("[^a-zA-Z0-9]".toRegex(), "").length
 
-        for (contact in contacts) {
-            val (score, dist) = scoreContact(query, contact)
+        for (c in contacts) {
+            val score = computeContactSimilarity(query, c.name)
             if (score > bestScore) {
                 bestScore = score
-                bestDist = dist
-                bestContact = contact
+                bestContact = c
             }
         }
 
-        val contact = bestContact ?: return null
-
-        val isAcceptable = when {
-            bestScore >= 0.80 -> true
-            qLen <= 4 && bestDist <= 1 && bestScore >= 0.60 -> true // "Jon" -> "John", "Alec" -> "Alex", "Mum" -> "Mom"
-            qLen in 5..8 && bestDist <= 2 && bestScore >= 0.60 -> true // "Ashis" -> "Ashish", "Docter" -> "Doctor"
-            qLen > 8 && bestDist <= 3 && bestScore >= 0.60 -> true
-            else -> bestScore >= 0.68
-        }
-
-        return if (isAcceptable) Pair(contact, bestScore) else null
+        return if (bestContact != null && bestScore >= 0.55) {
+            Pair(bestContact, bestScore)
+        } else null
     }
 
-    /**
-     * Resolves a voice command to the closest contact even if the name was recognized incorrectly.
-     * Evaluates delimiter forms as well as 1, 2, and 3-word candidate name spans.
-     */
-    private fun resolveVoiceCommandToClosestMatch(voiceText: String, contacts: List<ContactRecord>): ContactMatch? {
-        val clean = voiceText.trim()
-        val prefixes = listOf(
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?whatsapp\\s+message\\s+to\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?message\\s+to\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?whatsapp\\s+to\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?message\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+(?:a\\s+)?whatsapp\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+to\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:send\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:whatsapp\\s+to\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:whatsapp\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:message\\s+to\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:message\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:text\\s+to\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:text\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:tell\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:ask\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:say\\s+to\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:notify\\s+)"),
-            Regex("(?i)^(?:please\\s+)?(?:can\\s+you\\s+)?(?:could\\s+you\\s+)?(?:contact\\s+)")
-        )
-
-        var stripped = clean
-        for (prefix in prefixes) {
-            val match = prefix.find(stripped)
-            if (match != null) {
-                stripped = stripped.substring(match.range.last + 1).trim()
-                break
-            }
-        }
-
-        if (stripped.isEmpty()) return null
+    private fun resolveVoiceCommandToClosestMatch(spokenText: String, contacts: List<ContactRecord>): ContactMatch? {
+        val clean = spokenText.trim()
+        val prefixRegex = Regex("(?i)^(?:send(?: a)? message to|send message|send sms to|message to|whatsapp to|whatsapp|tell|msg to)\\s+")
+        val stripped = clean.replace(prefixRegex, "").trim()
 
         val candidates = mutableListOf<ContactMatch>()
-
-        // Strategy 1: Delimiter Separation (-, :, that, saying, to say, please, telling, about)
-        val delimiterRegex = Regex("(?i)^(.+?)\\s*(?:[-:]|(?:\\s+(?:that|saying|to say|please|telling|about)))\\s+(.+)$")
+        val delimiterRegex = Regex("(?i)^(.*?)(?:\\s*[-:]\\s*|\\s+that\\s+|\\s+saying\\s+|\\s+to say\\s+)(.*)$")
         val delimMatch = delimiterRegex.find(stripped)
         if (delimMatch != null) {
             val query = delimMatch.groupValues[1].trim()
@@ -962,7 +1046,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
 
-        // Strategy 2: N-gram word spans from beginning (1 to 3 words)
         val words = stripped.split("\\s+".toRegex()).filter { it.isNotBlank() }
         val maxWordsToTry = minOf(3, words.size)
 
@@ -982,21 +1065,19 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         if (candidates.isEmpty()) return null
-
-        // Return candidate with the highest similarity score
         return candidates.maxByOrNull { it.score }
     }
 
-    /**
-     * Intelligent Contact-Aware Voice Command Parser:
-     * Resolves voice command to closest contact name (handling recognition misspellings),
-     * extracts message body, announces spoken feedback, and dispatches via WhatsApp.
-     */
     private fun processVoiceCommandString(voiceText: String) {
         val clean = voiceText.trim()
         Log.d(TAG, "Processing voice command: $clean")
 
-        // Notify web UI of the incoming transcript
+        // Check if user is asking to read out reply
+        if (isReplyReadoutQuery(clean)) {
+            handleVoiceQueryReadout()
+            return
+        }
+
         runOnUiThread {
             webView?.evaluateJavascript(
                 "if (window.handleNativeVoiceCommand) { window.handleNativeVoiceCommand('${clean.replace("'", "\\'")}'); }",
@@ -1017,11 +1098,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             if (match.isExact) {
                 speak("Sending WhatsApp message to ${matchedContact.name} automatically.")
             } else {
-                // Name was recognized with spelling difference: matched to closest contact!
                 speak("Matched closest contact ${matchedContact.name} for ${match.matchedCandidate}. Sending WhatsApp message automatically.")
             }
 
-            Log.d(TAG, "Closest contact match: ${matchedContact.name} (from '${match.matchedCandidate}') with score: ${match.score}")
             notifyBufferTelemetry("SENT", packetsReceivedCount, dataBuffer.size(), "To ${matchedContact.name}: $messageBody")
             sendWhatsAppMessage(matchedContact.phone, messageBody, matchedContact.name)
         } else {
@@ -1058,7 +1137,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             Log.e(TAG, "Error fetching contact list", e)
         }
 
-        // Default assistive contacts if device contacts are empty
         if (list.isEmpty()) {
             list.add(ContactRecord("Mom", "+919876543210", "Family"))
             list.add(ContactRecord("Dad", "+919876543211", "Family"))
@@ -1068,30 +1146,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         return list
-    }
-
-    private fun queryPhoneNumberByName(name: String): String? {
-        val contacts = getAllContactsList()
-        val match = findClosestContact(name, contacts)
-        if (match != null) {
-            return match.first.phone
-        }
-
-        // Direct SQL fallback
-        val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
-        val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
-        val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
-        val selectionArgs = arrayOf("%$name%")
-
-        contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                if (numberIndex >= 0) {
-                    return cursor.getString(numberIndex)
-                }
-            }
-        }
-        return null
     }
 
     private fun initSpeechRecognizer() {

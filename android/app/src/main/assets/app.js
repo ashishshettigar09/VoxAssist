@@ -1,6 +1,7 @@
 /**
  * VoxAssist - Voice-to-WhatsApp Assistive Companion Logic
- * Microcontroller (FRDM-RW612 + INMP441) & Mobile App Interface
+ * NXP FRDM-MCXW71 Microcontroller & Mobile App Interface
+ * Professional High-Contrast White Theme & Settings Hub
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -10,7 +11,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const state = {
     isRecording: false,
     bleConnected: true,
+    connectedDeviceName: 'FRDM-MCXW71-VOX',
+    connectedMac: '00:04:9F:8A:2B:10',
+    currentRssi: -42,
     ttsEnabled: true,
+    speechRate: 1.0,
+    theme: localStorage.getItem('voxassist_theme') || 'light',
+    isScanning: false,
+    activeTab: 'voice',
+    activeDeviceFilter: 'all',
     audioContext: null,
     analyser: null,
     microphoneStream: null,
@@ -27,8 +36,43 @@ document.addEventListener('DOMContentLoaded', () => {
       { id: 5, name: 'Caregiver', phone: '+919876543214', relation: 'Caregiver' },
       { id: 6, name: 'Ashish Shettigar', phone: '+919876543215', relation: 'Friend' }
     ],
-    outbox: []
+    outbox: [],
+    repliesHistory: [
+      {
+        id: 101,
+        sender: 'Mom',
+        message: 'I am outside the clinic, waiting in the car.',
+        time: 'Just now',
+        timestamp: Date.now() - 60000,
+        announced: true
+      }
+    ],
+    scannedDevices: [
+      {
+        name: 'FRDM-MCXW71-VOX',
+        address: '00:04:9F:8A:2B:10',
+        rssi: -42,
+        isTargetMcu: true,
+        serviceUuid: '0xFFF0'
+      },
+      {
+        name: 'FRDM-MCXW71-LAB',
+        address: '00:04:9F:8A:2B:14',
+        rssi: -58,
+        isTargetMcu: true,
+        serviceUuid: '0xFFF0'
+      },
+      {
+        name: 'Wireless Headset',
+        address: 'F4:7D:EF:12:34:56',
+        rssi: -72,
+        isTargetMcu: false
+      }
+    ]
   };
+
+  // Apply Theme
+  document.documentElement.setAttribute('data-theme', state.theme);
 
   // Restore custom contacts from localStorage if available
   const savedContacts = localStorage.getItem('voxassist_contacts');
@@ -41,44 +85,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // Real Phone Contacts Synchronization (From Android Native)
-  // =========================================================================
-  window.loadDeviceContacts = function(deviceContactsData) {
-    try {
-      let contactsList = deviceContactsData;
-      if (typeof deviceContactsData === 'string') {
-        contactsList = JSON.parse(deviceContactsData);
-      }
-      if (Array.isArray(contactsList) && contactsList.length > 0) {
-        state.contacts = contactsList;
-        renderContacts();
-        logBlePacket(`[CONTACTS] Synced ${contactsList.length} real phone contacts`, 'success');
-      }
-    } catch (e) {
-      console.error('Failed to parse device contacts:', e);
-    }
-  };
-
-  // If AndroidBridge exists, request contacts immediately
-  if (window.AndroidBridge && typeof window.AndroidBridge.getDeviceContactsJson === 'function') {
-    try {
-      const json = window.AndroidBridge.getDeviceContactsJson();
-      if (json) {
-        window.loadDeviceContacts(json);
-      }
-    } catch (e) {
-      console.warn('Failed to call getDeviceContactsJson on startup:', e);
-    }
-  }
-
-  // =========================================================================
   // DOM Elements
   // =========================================================================
+  const segmentTabs = document.querySelectorAll('.segment-tab');
+  const tabViews = document.querySelectorAll('.tab-view');
+  const themeToggleBtn = document.getElementById('themeToggleBtn');
+  const themeToggleIcon = document.getElementById('themeToggleIcon');
+  const themeToggleText = document.getElementById('themeToggleText');
+
   const pttButton = document.getElementById('pttButton');
   const pttLabel = document.getElementById('pttLabel');
   const pttSubLabel = document.getElementById('pttSubLabel');
   const waveformCanvas = document.getElementById('waveformCanvas');
-  const canvasCtx = waveformCanvas.getContext('2d');
+  const canvasCtx = waveformCanvas ? waveformCanvas.getContext('2d') : null;
   const micLevelLabel = document.getElementById('micLevelLabel');
   const transcriptDisplay = document.getElementById('transcriptDisplay');
   const intentContact = document.getElementById('intentContact');
@@ -92,11 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const contactsList = document.getElementById('contactsList');
   const outboxList = document.getElementById('outboxList');
   const clearOutboxBtn = document.getElementById('clearOutboxBtn');
-  const ttsVoiceToggleBtn = document.getElementById('ttsVoiceToggleBtn');
-  const ttsBtnText = document.getElementById('ttsBtnText');
   const ttsStatusPill = document.getElementById('ttsStatusPill');
   const bleStatusPill = document.getElementById('bleStatusPill');
-  const reconnectBleBtn = document.getElementById('reconnectBleBtn');
+  const bleStatusPillLabel = document.getElementById('bleStatusPillLabel');
   const openAddContactBtn = document.getElementById('openAddContactBtn');
   const contactModalBackdrop = document.getElementById('contactModalBackdrop');
   const closeModalBtn = document.getElementById('closeModalBtn');
@@ -110,8 +127,45 @@ document.addEventListener('DOMContentLoaded', () => {
   const a11yBanner = document.getElementById('a11yBanner');
   const enableA11yBtn = document.getElementById('enableA11yBtn');
 
-  // Microcontroller Buffer Telemetry & Filter Selectors
-  const mcuBufferCard = document.getElementById('mcuBufferCard');
+  // Settings & Connected Devices Selectors
+  const startScanBtn = document.getElementById('startScanBtn');
+  const stopScanBtn = document.getElementById('stopScanBtn');
+  const scanBtnText = document.getElementById('scanBtnText');
+  const disconnectBleBtn = document.getElementById('disconnectBleBtn');
+  const pingSpeakerBtn = document.getElementById('pingSpeakerBtn');
+  const reconnectMcuBtn = document.getElementById('reconnectMcuBtn');
+  const webBlePairBtn = document.getElementById('webBlePairBtn');
+  const devicesGrid = document.getElementById('devicesGrid');
+  const devicesListCount = document.getElementById('devicesListCount');
+  const scannedCountBadge = document.getElementById('scannedCountBadge');
+  const filterAllDevices = document.getElementById('filterAllDevices');
+  const filterTargetMcu = document.getElementById('filterTargetMcu');
+  const quickOpenBleTabBtn = document.getElementById('quickOpenBleTabBtn');
+  const quickBleStateLabel = document.getElementById('quickBleStateLabel');
+  const connectedNameDisplay = document.getElementById('connectedNameDisplay');
+  const mcuRssiDisplay = document.getElementById('mcuRssiDisplay');
+  const mcuLivePill = document.getElementById('mcuLivePill');
+  const voiceFeedbackToggle = document.getElementById('voiceFeedbackToggle');
+  const speechRateSelect = document.getElementById('speechRateSelect');
+  const testSpkChimeSettingsBtn = document.getElementById('testSpkChimeSettingsBtn');
+  const openA11ySettingsBtn = document.getElementById('openA11ySettingsBtn');
+  const openNotifSettingsBtn = document.getElementById('openNotifSettingsBtn');
+
+  // WhatsApp Replies & Speaker Selectors
+  const simulateReplyMomBtn = document.getElementById('simulateReplyMomBtn');
+  const enableNotifBtn = document.getElementById('enableNotifBtn');
+  const notifListenerBanner = document.getElementById('notifListenerBanner');
+  const notifStatusDesc = document.getElementById('notifStatusDesc');
+  const readoutBox = document.getElementById('readoutBox');
+  const readoutContent = document.getElementById('readoutContent');
+  const repliesList = document.getElementById('repliesList');
+  const feedCountBadge = document.getElementById('feedCountBadge');
+  const replyNotifDot = document.getElementById('replyNotifDot');
+  const queryTestChips = document.querySelectorAll('.query-test-chip');
+  const testSpkChimeBtn = document.getElementById('testSpkChimeBtn');
+  const testSpkReadoutBtn = document.getElementById('testSpkReadoutBtn');
+
+  // Microcontroller Buffer Telemetry
   const bufferStatusBadge = document.getElementById('bufferStatusBadge');
   const bufPacketCount = document.getElementById('bufPacketCount');
   const bufByteCount = document.getElementById('bufByteCount');
@@ -125,12 +179,86 @@ document.addEventListener('DOMContentLoaded', () => {
   const contactFilterChips = document.getElementById('contactFilterChips');
 
   state.activeFilterCategory = 'all';
-  state.bufferedBytesCount = 0;
-  state.bufferedPacketsCount = 0;
-  state.bufferedPayloadPreview = '';
 
   // =========================================================================
-  // Web Audio & Sound Effects (Assistive Audio Feedback for Blind Users)
+  // Theme Switching Logic (Light / Dark)
+  // =========================================================================
+  function updateThemeUI() {
+    if (state.theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      if (themeToggleIcon) themeToggleIcon.textContent = '🌙';
+      if (themeToggleText) themeToggleText.textContent = 'Dark Contrast';
+    } else {
+      document.documentElement.setAttribute('data-theme', 'light');
+      if (themeToggleIcon) themeToggleIcon.textContent = '☀️';
+      if (themeToggleText) themeToggleText.textContent = 'Light Theme';
+    }
+  }
+  updateThemeUI();
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      state.theme = state.theme === 'light' ? 'dark' : 'light';
+      localStorage.setItem('voxassist_theme', state.theme);
+      updateThemeUI();
+      speakAloud(`Switched to ${state.theme === 'light' ? 'light' : 'dark'} theme.`);
+    });
+  }
+
+  // =========================================================================
+  // Segmented Tab Navigation Logic
+  // =========================================================================
+  function switchTab(tabId) {
+    state.activeTab = tabId;
+
+    segmentTabs.forEach(tab => {
+      const isTarget = tab.getAttribute('data-tab') === tabId;
+      tab.classList.toggle('active', isTarget);
+      tab.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+    });
+
+    let targetViewId = 'viewVoice';
+    if (tabId === 'settings' || tabId === 'ble-devices') targetViewId = 'viewSettings';
+    else if (tabId === 'replies') targetViewId = 'viewReplies';
+    else if (tabId === 'contacts') targetViewId = 'viewContacts';
+    else if (tabId === 'hardware') targetViewId = 'viewHardware';
+
+    tabViews.forEach(view => {
+      view.classList.toggle('active', view.id === targetViewId);
+    });
+
+    if (tabId === 'settings' || tabId === 'ble-devices') {
+      renderScannedDevices();
+      updateConnectedDeviceUI();
+    } else if (tabId === 'replies') {
+      if (replyNotifDot) replyNotifDot.hidden = true;
+      renderReplies();
+    } else if (tabId === 'contacts') {
+      renderContacts();
+    }
+  }
+
+  segmentTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabId = tab.getAttribute('data-tab');
+      switchTab(tabId);
+    });
+  });
+
+  if (bleStatusPill) {
+    bleStatusPill.addEventListener('click', () => {
+      switchTab('settings');
+    });
+  }
+
+  if (quickOpenBleTabBtn) {
+    quickOpenBleTabBtn.addEventListener('click', () => {
+      switchTab('settings');
+    });
+  }
+
+  // =========================================================================
+  // Web Audio & Sound Effects
   // =========================================================================
   function getAudioContext() {
     if (!state.audioContext) {
@@ -187,6 +315,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function playNotificationChime() {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.2, now);
+      gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.14);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1320, now + 0.15);
+      gain2.gain.setValueAtTime(0.25, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.32);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.35);
+    } catch (e) {
+      console.warn('Notification chime error:', e);
+    }
+  }
+
   function playErrorChime() {
     try {
       const ctx = getAudioContext();
@@ -212,9 +371,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Text-To-Speech (TTS Spoken Accessibility Feedback)
   // =========================================================================
   function speakAloud(text, interrupt = true) {
-    speechFeedbackText.textContent = `"${text}"`;
+    if (speechFeedbackText) {
+      speechFeedbackText.textContent = `"${text}"`;
+    }
 
-    // Forward to native Android TTS if inside APK
     if (window.AndroidBridge && typeof window.AndroidBridge.speak === 'function') {
       window.AndroidBridge.speak(text);
       return;
@@ -227,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.05;
+    utterance.rate = state.speechRate;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
@@ -241,10 +401,456 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
+  // Settings & Connected Devices Management
+  // =========================================================================
+  function updateConnectedDeviceUI() {
+    if (connectedNameDisplay) {
+      connectedNameDisplay.textContent = state.bleConnected ? state.connectedDeviceName : 'None (Disconnected)';
+    }
+    if (mcuRssiDisplay) {
+      mcuRssiDisplay.textContent = state.bleConnected ? `${state.currentRssi} dBm (Excellent)` : '-- dBm';
+    }
+    if (mcuLivePill) {
+      mcuLivePill.textContent = state.bleConnected ? '● Connected (GATT Ready)' : 'Disconnected';
+      mcuLivePill.style.background = state.bleConnected ? '#dcfce7' : '#fee2e2';
+      mcuLivePill.style.color = state.bleConnected ? '#065f46' : '#991b1b';
+      mcuLivePill.style.borderColor = state.bleConnected ? '#86efac' : '#fca5a5';
+    }
+  }
+
+  function renderScannedDevices() {
+    if (!devicesGrid) return;
+
+    let filtered = state.scannedDevices;
+    if (state.activeDeviceFilter === 'target') {
+      filtered = state.scannedDevices.filter(d => d.isTargetMcu);
+    }
+
+    if (devicesListCount) {
+      devicesListCount.textContent = filtered.length;
+    }
+    if (scannedCountBadge) {
+      scannedCountBadge.textContent = state.scannedDevices.length;
+    }
+
+    if (filtered.length === 0) {
+      devicesGrid.innerHTML = `
+        <div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: var(--text-muted);">
+          No Bluetooth devices discovered matching filter. Tap "Scan Nearby Devices" above.
+        </div>
+      `;
+      return;
+    }
+
+    devicesGrid.innerHTML = filtered.map(dev => {
+      const isConnected = state.bleConnected && (dev.name === state.connectedDeviceName || dev.name.includes('MCXW71'));
+      const rssi = dev.rssi || -60;
+      const barsActive = rssi >= -50 ? 4 : rssi >= -65 ? 3 : rssi >= -80 ? 2 : 1;
+
+      return `
+        <div class="device-card ${dev.isTargetMcu ? 'is-target' : ''}">
+          <div class="device-info-col">
+            <div class="device-name-row">
+              <span class="device-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</span>
+              ${dev.isTargetMcu ? '<span class="target-badge-sm">TARGET MCU</span>' : ''}
+            </div>
+            <div class="device-mac">${escapeHtml(dev.address)}</div>
+            <div class="device-rssi-row">
+              <div class="rssi-bars">
+                <span class="rssi-bar ${barsActive >= 1 ? 'active' : ''}" style="height: 4px;"></span>
+                <span class="rssi-bar ${barsActive >= 2 ? 'active' : ''}" style="height: 7px;"></span>
+                <span class="rssi-bar ${barsActive >= 3 ? 'active' : ''}" style="height: 10px;"></span>
+                <span class="rssi-bar ${barsActive >= 4 ? 'active' : ''}" style="height: 13px;"></span>
+              </div>
+              <span class="rssi-val">${rssi} dBm</span>
+            </div>
+          </div>
+          <div>
+            <button class="device-connect-btn ${isConnected ? 'connected' : ''}"
+                    data-address="${escapeHtml(dev.address)}"
+                    data-name="${escapeHtml(dev.name)}">
+              ${isConnected ? '✓ Connected' : 'Connect'}
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    devicesGrid.querySelectorAll('.device-connect-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const addr = btn.getAttribute('data-address');
+        const name = btn.getAttribute('data-name');
+        connectDevice(addr, name);
+      });
+    });
+  }
+
+  function startScanning() {
+    state.isScanning = true;
+    if (startScanBtn) {
+      startScanBtn.classList.add('scanning');
+      if (scanBtnText) scanBtnText.textContent = 'Scanning...';
+    }
+
+    logBlePacket('[BLE SCAN] Started Bluetooth LE nearby discovery...', 'sys');
+
+    if (window.AndroidBridge && typeof window.AndroidBridge.startBleScan === 'function') {
+      window.AndroidBridge.startBleScan();
+    } else {
+      setTimeout(() => {
+        if (!state.scannedDevices.some(d => d.address === '00:04:9F:8A:2B:10')) {
+          state.scannedDevices.unshift({
+            name: 'FRDM-MCXW71-VOX',
+            address: '00:04:9F:8A:2B:10',
+            rssi: -42,
+            isTargetMcu: true,
+            serviceUuid: '0xFFF0'
+          });
+        }
+        renderScannedDevices();
+      }, 700);
+    }
+  }
+
+  function stopScanning() {
+    state.isScanning = false;
+    if (startScanBtn) {
+      startScanBtn.classList.remove('scanning');
+      if (scanBtnText) scanBtnText.textContent = '🔍 Scan Nearby Devices';
+    }
+
+    if (window.AndroidBridge && typeof window.AndroidBridge.stopBleScan === 'function') {
+      window.AndroidBridge.stopBleScan();
+    }
+    logBlePacket('[BLE SCAN] Scan stopped.', 'sys');
+  }
+
+  function connectDevice(address, name) {
+    logBlePacket(`[BLE] Connecting to ${name} (${address})...`, 'tx');
+
+    if (window.AndroidBridge && typeof window.AndroidBridge.connectToDevice === 'function') {
+      window.AndroidBridge.connectToDevice(address);
+    } else {
+      setTimeout(() => {
+        updateBleStatus(`Connected (${name})`, true, name, -42);
+        playSuccessChime();
+        speakAloud(`Connected to ${name}. AUX microphone and speaker are ready.`);
+        logBlePacket(`[BLE] Connected and bonded with ${name}! MTU: 512 bytes.`, 'success');
+      }, 500);
+    }
+  }
+
+  function disconnectBle() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.disconnectBle === 'function') {
+      window.AndroidBridge.disconnectBle();
+    } else {
+      updateBleStatus('Disconnected', false, '', 0);
+      speakAloud('Microcontroller disconnected.');
+      logBlePacket('[BLE] Disconnected from peripheral.', 'err');
+    }
+  }
+
+  if (startScanBtn) startScanBtn.addEventListener('click', startScanning);
+  if (stopScanBtn) stopScanBtn.addEventListener('click', stopScanning);
+  if (disconnectBleBtn) disconnectBleBtn.addEventListener('click', disconnectBle);
+
+  if (pingSpeakerBtn) {
+    pingSpeakerBtn.addEventListener('click', () => {
+      playNotificationChime();
+      speakAloud('Speaker test successful. NXP board audio is ready.');
+      logBlePacket('[SPEAKER TEST] Ping sent to board speaker on PTB1 (Opcode 0x10)', 'tx');
+    });
+  }
+
+  if (reconnectMcuBtn) {
+    reconnectMcuBtn.addEventListener('click', () => {
+      connectDevice('00:04:9F:8A:2B:10', 'FRDM-MCXW71-VOX');
+    });
+  }
+
+  if (voiceFeedbackToggle) {
+    voiceFeedbackToggle.addEventListener('change', (e) => {
+      state.ttsEnabled = e.target.checked;
+      speakAloud(state.ttsEnabled ? 'Spoken feedback enabled.' : 'Spoken feedback muted.');
+    });
+  }
+
+  if (speechRateSelect) {
+    speechRateSelect.addEventListener('change', (e) => {
+      state.speechRate = parseFloat(e.target.value) || 1.0;
+      speakAloud(`Speech rate set to ${state.speechRate} speed.`);
+    });
+  }
+
+  if (testSpkChimeSettingsBtn) {
+    testSpkChimeSettingsBtn.addEventListener('click', () => {
+      playNotificationChime();
+    });
+  }
+
+  if (openA11ySettingsBtn) {
+    openA11ySettingsBtn.addEventListener('click', () => {
+      if (window.AndroidBridge && typeof window.AndroidBridge.openAccessibilitySettings === 'function') {
+        window.AndroidBridge.openAccessibilitySettings();
+      } else {
+        alert('To enable Hands-Free Auto-Send on Android:\n\n1. Open Settings > Accessibility.\n2. Tap "Installed Apps" or "VoxAssist".\n3. Turn VoxAssist ON.');
+      }
+    });
+  }
+
+  if (openNotifSettingsBtn) {
+    openNotifSettingsBtn.addEventListener('click', () => {
+      if (window.AndroidBridge && typeof window.AndroidBridge.openNotificationListenerSettings === 'function') {
+        window.AndroidBridge.openNotificationListenerSettings();
+      } else {
+        alert('To enable WhatsApp notification reading on Android:\n\n1. Open Settings > Apps > Special App Access > Device & app notifications.\n2. Enable "VoxAssist".');
+      }
+    });
+  }
+
+  if (filterAllDevices) {
+    filterAllDevices.addEventListener('click', () => {
+      state.activeDeviceFilter = 'all';
+      filterAllDevices.classList.add('active');
+      if (filterTargetMcu) filterTargetMcu.classList.remove('active');
+      renderScannedDevices();
+    });
+  }
+
+  if (filterTargetMcu) {
+    filterTargetMcu.addEventListener('click', () => {
+      state.activeDeviceFilter = 'target';
+      filterTargetMcu.classList.add('active');
+      if (filterAllDevices) filterAllDevices.classList.remove('active');
+      renderScannedDevices();
+    });
+  }
+
+  if (webBlePairBtn) {
+    webBlePairBtn.addEventListener('click', async () => {
+      if (!navigator.bluetooth) {
+        alert('Web Bluetooth API is not supported in this browser. Please use Chrome on Android/Desktop or open in our Android APK.');
+        return;
+      }
+      try {
+        logBlePacket('[WEB BLE] Opening Bluetooth device pairing dialog...');
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [0xFFF0, '0000fff0-0000-1000-8000-00805f9b34fb']
+        });
+        logBlePacket(`[WEB BLE] User selected: ${device.name || 'Unknown'} (${device.id})`);
+        connectDevice(device.id, device.name || 'FRDM-MCXW71');
+      } catch (err) {
+        logBlePacket(`[WEB BLE] Pairing cancelled: ${err.message}`, 'err');
+      }
+    });
+  }
+
+  window.updateScannedDevices = function(data) {
+    try {
+      let list = data;
+      if (typeof data === 'string') {
+        list = JSON.parse(data);
+      }
+      if (Array.isArray(list)) {
+        state.scannedDevices = list;
+        renderScannedDevices();
+      }
+    } catch (e) {
+      console.error('Failed to parse scanned devices:', e);
+    }
+  };
+
+  window.updateBleStatus = function(statusText, connected, deviceName, rssi) {
+    state.bleConnected = connected;
+    state.connectedDeviceName = deviceName || 'FRDM-MCXW71-VOX';
+    state.currentRssi = rssi || -42;
+
+    if (bleStatusPill) {
+      bleStatusPill.className = connected ? 'status-pill connected' : 'status-pill';
+      if (bleStatusPillLabel) {
+        bleStatusPillLabel.textContent = connected
+          ? `BLE: Connected (${state.connectedDeviceName})`
+          : `BLE: ${statusText || 'Scanning...'}`;
+      }
+    }
+
+    if (bleStateLabel) {
+      bleStateLabel.textContent = connected ? state.connectedDeviceName : 'Scanning...';
+      bleStateLabel.className = connected ? 'buf-metric-val highlight' : 'buf-metric-val';
+    }
+
+    if (quickBleStateLabel) {
+      quickBleStateLabel.textContent = connected ? `Connected (${state.currentRssi} dBm)` : 'Disconnected';
+      quickBleStateLabel.className = connected ? 'spec-value highlight' : 'spec-value';
+    }
+
+    if (bleRssiLabel) {
+      bleRssiLabel.textContent = rssi ? `${rssi} dBm` : (connected ? '-42 dBm' : '-- dBm');
+    }
+
+    updateConnectedDeviceUI();
+    renderScannedDevices();
+  };
+
+  // =========================================================================
+  // WhatsApp Incoming Replies & Speaker Subsystem
+  // =========================================================================
+  function renderReplies() {
+    if (!repliesList) return;
+
+    if (state.repliesHistory.length === 0) {
+      repliesList.innerHTML = '<p class="empty-state">No incoming WhatsApp replies yet. Click "+ Test Reply from Mom" above to test the speaker announcement!</p>';
+      if (feedCountBadge) feedCountBadge.textContent = '0 replies';
+      return;
+    }
+
+    if (feedCountBadge) {
+      feedCountBadge.textContent = `${state.repliesHistory.length} replies`;
+    }
+
+    repliesList.innerHTML = state.repliesHistory.map(rep => `
+      <div class="reply-card">
+        <div class="reply-card-header">
+          <span class="reply-sender">From: ${escapeHtml(rep.sender)}</span>
+          <span class="reply-time">${escapeHtml(rep.time || 'Recently')}</span>
+        </div>
+        <div class="reply-text">"${escapeHtml(rep.message)}"</div>
+        <div class="reply-footer">
+          <span class="announced-tag">📢 Announced via Speaker</span>
+          <button class="reply-read-btn" data-text="Message from ${escapeHtml(rep.sender)}: ${escapeHtml(rep.message)}">
+            🔊 Read Out
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    repliesList.querySelectorAll('.reply-read-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const text = btn.getAttribute('data-text');
+        speakAloud(text);
+        if (readoutContent) readoutContent.textContent = `"${text}"`;
+      });
+    });
+  }
+
+  function readOutLastReply() {
+    if (state.repliesHistory.length === 0) {
+      const msg = 'You have no new WhatsApp replies.';
+      speakAloud(msg);
+      if (readoutContent) readoutContent.textContent = `"${msg}"`;
+      return;
+    }
+
+    const latest = state.repliesHistory[0];
+    const text = `Message from ${latest.sender}: ${latest.message}`;
+    speakAloud(text);
+    if (readoutContent) readoutContent.textContent = `"${text}"`;
+
+    logBlePacket(`[SPEAKER] Streamed WhatsApp reply to FRDM-MCXW71 speaker (Opcode 0x20)`, 'success');
+
+    if (window.AndroidBridge && typeof window.AndroidBridge.readLastWhatsAppReply === 'function') {
+      window.AndroidBridge.readLastWhatsAppReply();
+    }
+  }
+
+  queryTestChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      readOutLastReply();
+    });
+  });
+
+  if (testSpkChimeBtn) {
+    testSpkChimeBtn.addEventListener('click', () => {
+      playNotificationChime();
+      logBlePacket('[SPEAKER] Sent notification chime test (Opcode 0x10) to board speaker', 'tx');
+    });
+  }
+
+  if (testSpkReadoutBtn) {
+    testSpkReadoutBtn.addEventListener('click', () => {
+      readOutLastReply();
+    });
+  }
+
+  if (simulateReplyMomBtn) {
+    simulateReplyMomBtn.addEventListener('click', () => {
+      const sampleReplies = [
+        'I am outside the clinic, please pick me up',
+        'I am waiting by the gate in the silver car',
+        'Can we meet in 15 minutes at the lobby?'
+      ];
+      const randomText = sampleReplies[Math.floor(Math.random() * sampleReplies.length)];
+      handleIncomingReply('Mom', randomText);
+    });
+  }
+
+  function handleIncomingReply(sender, message, timestamp) {
+    const timeStr = new Date(timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    state.repliesHistory.unshift({
+      id: Date.now(),
+      sender,
+      message,
+      time: timeStr,
+      timestamp: timestamp || Date.now(),
+      announced: true
+    });
+
+    renderReplies();
+
+    playNotificationChime();
+    setTimeout(() => {
+      speakAloud(`New message from ${sender}.`);
+    }, 300);
+
+    if (replyNotifDot) replyNotifDot.hidden = false;
+
+    logBlePacket(`[WHATSAPP RECEPTION] New reply from "${sender}": "${message}"`, 'success');
+  }
+
+  window.onIncomingWhatsAppReply = function(sender, message, timestamp) {
+    handleIncomingReply(sender, message, timestamp);
+  };
+
+  window.onReadoutTriggered = function(text) {
+    if (readoutContent) {
+      readoutContent.textContent = `"${text}"`;
+    }
+  };
+
+  window.setNotificationListenerStatus = function(enabled) {
+    if (notifListenerBanner) {
+      if (enabled) {
+        notifListenerBanner.style.borderColor = '#86efac';
+        notifListenerBanner.style.background = '#ecfdf5';
+        if (notifStatusDesc) {
+          notifStatusDesc.textContent = 'Active: incoming WhatsApp replies are automatically intercepted and announced!';
+        }
+        if (enableNotifBtn) enableNotifBtn.style.display = 'none';
+      } else {
+        if (enableNotifBtn) enableNotifBtn.style.display = 'inline-block';
+      }
+    }
+  };
+
+  if (enableNotifBtn) {
+    enableNotifBtn.addEventListener('click', () => {
+      if (window.AndroidBridge && typeof window.AndroidBridge.openNotificationListenerSettings === 'function') {
+        window.AndroidBridge.openNotificationListenerSettings();
+      } else {
+        alert('To enable WhatsApp notification reading on Android:\n\n1. Open Settings > Apps > Special App Access > Device & app notifications.\n2. Tap "VoxAssist".\n3. Allow notification access.');
+      }
+    });
+  }
+
+  // =========================================================================
   // Live Audio Waveform Animation (Canvas)
   // =========================================================================
   let wavePhase = 0;
   function drawWaveform() {
+    if (!waveformCanvas || !canvasCtx) return;
+
     canvasCtx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
     const width = waveformCanvas.width;
     const height = waveformCanvas.height;
@@ -254,9 +860,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (state.isRecording) {
       wavePhase += 0.18;
-      canvasCtx.strokeStyle = '#25D366'; // WhatsApp Emerald Green
+      canvasCtx.strokeStyle = '#059669';
       canvasCtx.shadowBlur = 10;
-      canvasCtx.shadowColor = '#25D366';
+      canvasCtx.shadowColor = '#059669';
 
       canvasCtx.beginPath();
       for (let x = 0; x < width; x++) {
@@ -272,10 +878,12 @@ document.addEventListener('DOMContentLoaded', () => {
       canvasCtx.stroke();
 
       const randomDb = -18 + Math.floor(Math.sin(wavePhase * 2) * 8);
-      micLevelLabel.textContent = `${randomDb} dB (INMP441 active)`;
-      micLevelLabel.style.color = '#25D366';
+      if (micLevelLabel) {
+        micLevelLabel.textContent = `${randomDb} dB (AUX In active)`;
+        micLevelLabel.style.color = '#059669';
+      }
     } else {
-      canvasCtx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+      canvasCtx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
       canvasCtx.shadowBlur = 0;
       canvasCtx.beginPath();
       canvasCtx.moveTo(0, centerY);
@@ -284,8 +892,10 @@ document.addEventListener('DOMContentLoaded', () => {
         canvasCtx.lineTo(x, centerY + ambient);
       }
       canvasCtx.stroke();
-      micLevelLabel.textContent = 'Muted / Idle';
-      micLevelLabel.style.color = '#64748b';
+      if (micLevelLabel) {
+        micLevelLabel.textContent = 'Muted / Idle';
+        micLevelLabel.style.color = '#64748b';
+      }
     }
 
     state.animationFrameId = requestAnimationFrame(drawWaveform);
@@ -303,7 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.recognition.lang = 'en-US';
 
     state.recognition.onstart = () => {
-      transcriptDisplay.classList.add('live');
+      if (transcriptDisplay) transcriptDisplay.classList.add('live');
     };
 
     state.recognition.onresult = (event) => {
@@ -321,8 +931,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const text = finalTranscript || interimTranscript;
       if (text) {
         state.currentTranscript = text;
-        transcriptDisplay.textContent = `"${text}"`;
-        logBlePacket(`[I2S->BLE] ${generateHexPreview(text)} (${text.length * 2}B)`);
+        if (transcriptDisplay) transcriptDisplay.textContent = `"${text}"`;
+        logBlePacket(`[AUX->BLE] ${generateHexPreview(text)} (${text.length * 2}B)`);
       }
     };
 
@@ -331,39 +941,34 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     state.recognition.onend = () => {
-      transcriptDisplay.classList.remove('live');
+      if (transcriptDisplay) transcriptDisplay.classList.remove('live');
       if (state.isRecording) {
         stopRecording();
       }
     };
   }
 
-  // =========================================================================
-  // Push-To-Talk (PTT) Controls
-  // =========================================================================
+  // Push-To-Talk Controls
   function startRecording() {
     if (state.isRecording) return;
     state.isRecording = true;
     getAudioContext();
     playStartChime();
 
-    pttButton.classList.add('recording');
-    pttLabel.textContent = 'LISTENING...';
-    pttSubLabel.textContent = 'Release or tap to send';
+    if (pttButton) pttButton.classList.add('recording');
+    if (pttLabel) pttLabel.textContent = 'LISTENING...';
+    if (pttSubLabel) pttSubLabel.textContent = 'Release to dispatch via WhatsApp';
+    if (transcriptDisplay) {
+      transcriptDisplay.textContent = 'Listening to speech from AUX In / Mic...';
+    }
 
-    state.currentTranscript = '';
-    transcriptDisplay.innerHTML = '<span class="placeholder-text">Listening for: "Send message to [Contact] - [Message]"...</span>';
-    intentStatusBadge.textContent = 'LISTENING';
-    intentStatusBadge.className = 'intent-status-badge';
-
-    speakAloud('Listening. State your command.', false);
-    logBlePacket('[BLE] PTT Asserted -> INMP441 I2S DMA Stream Started');
+    logBlePacket('[AUX PTT] Button pressed -> START frame (0x01)', 'tx');
 
     if (state.recognition) {
       try {
         state.recognition.start();
       } catch (e) {
-        console.warn('Recognition already started or error:', e);
+        console.warn('Speech rec already active');
       }
     }
   }
@@ -372,166 +977,61 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!state.isRecording) return;
     state.isRecording = false;
 
-    pttButton.classList.remove('recording');
-    pttLabel.textContent = 'HOLD TO SPEAK';
-    pttSubLabel.textContent = 'or tap once to toggle';
+    if (pttButton) pttButton.classList.remove('recording');
+    if (pttLabel) pttLabel.textContent = 'HOLD TO SPEAK';
+    if (pttSubLabel) pttSubLabel.textContent = 'or press AUX switch on FRDM board';
 
-    logBlePacket('[BLE] PTT Released -> Stream Flush & Process');
+    logBlePacket('[AUX PTT] Button released -> END frame (0x03)', 'tx');
 
     if (state.recognition) {
       try {
         state.recognition.stop();
-      } catch (e) {
-        console.warn('Recognition stop error:', e);
-      }
+      } catch (e) {}
     }
 
     setTimeout(() => {
       if (state.currentTranscript.trim()) {
-        processVoiceCommand(state.currentTranscript);
+        processVoiceCommand(state.currentTranscript.trim());
       } else {
-        transcriptDisplay.innerHTML = '<span class="placeholder-text">No voice input detected. Tap button or use a preset below.</span>';
-        intentStatusBadge.textContent = 'NO INPUT';
-        intentStatusBadge.className = 'intent-status-badge';
+        speakAloud('No speech detected. Please hold the button and speak clearly.');
       }
-    }, 250);
+    }, 300);
   }
 
-  let pttHoldTimeout = null;
-  let isHoldMode = false;
-
-  pttButton.addEventListener('mousedown', (e) => {
-    isHoldMode = false;
-    pttHoldTimeout = setTimeout(() => {
-      isHoldMode = true;
+  if (pttButton) {
+    pttButton.addEventListener('mousedown', startRecording);
+    pttButton.addEventListener('mouseup', stopRecording);
+    pttButton.addEventListener('touchstart', (e) => {
+      e.preventDefault();
       startRecording();
-    }, 180);
-  });
-
-  window.addEventListener('mouseup', () => {
-    if (pttHoldTimeout) clearTimeout(pttHoldTimeout);
-    if (isHoldMode && state.isRecording) {
+    });
+    pttButton.addEventListener('touchend', (e) => {
+      e.preventDefault();
       stopRecording();
-      isHoldMode = false;
-    }
-  });
+    });
+  }
 
-  pttButton.addEventListener('click', () => {
-    if (!isHoldMode) {
-      if (!state.isRecording) {
-        startRecording();
-      } else {
-        stopRecording();
-      }
-    }
-  });
-
-  // Touch handlers for mobile phones
-  pttButton.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    isHoldMode = true;
-    startRecording();
-  });
-
-  pttButton.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    if (state.isRecording) {
-      stopRecording();
-    }
-  });
-
-  // Keyboard Spacebar PTT
+  // Spacebar Hotkey
+  let spacePressed = false;
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT') {
+    if (e.code === 'Space' && !spacePressed && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+      spacePressed = true;
       e.preventDefault();
       startRecording();
     }
   });
 
   window.addEventListener('keyup', (e) => {
-    if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
+    if (e.code === 'Space' && spacePressed) {
+      spacePressed = false;
       e.preventDefault();
       stopRecording();
     }
   });
 
   // =========================================================================
-  // Microcontroller Real-Time BLE Buffer Engine Telemetry
+  // Contact Search & Fuzzy Matcher Engine
   // =========================================================================
-  window.updateBufferTelemetry = function(stateName, packetCount, byteCount, preview) {
-    state.bufferedPacketsCount = packetCount || 0;
-    state.bufferedBytesCount = byteCount || 0;
-    state.bufferedPayloadPreview = preview || '';
-
-    if (bufPacketCount) bufPacketCount.textContent = `${state.bufferedPacketsCount} pkts`;
-    if (bufByteCount) {
-      bufByteCount.textContent = byteCount >= 1024 
-        ? `${(byteCount / 1024).toFixed(1)} KB` 
-        : `${byteCount} B`;
-    }
-
-    if (bufferProgressBar) {
-      // Progress fill based on byte accumulation
-      const pct = Math.min(100, Math.max(byteCount > 0 ? 8 : 0, (byteCount / 400) * 100));
-      bufferProgressBar.style.width = `${pct}%`;
-    }
-
-    if (bufferPreviewBox) {
-      bufferPreviewBox.textContent = preview || (byteCount > 0 ? `Accumulated Audio PCM (${byteCount} bytes)...` : 'Buffer is empty. Waiting for PTT trigger...');
-    }
-
-    if (bufferStatusBadge) {
-      const s = (stateName || '').toUpperCase();
-      bufferStatusBadge.className = 'buffer-status-badge';
-      if (s.includes('RECORD')) {
-        bufferStatusBadge.classList.add('recording');
-        bufferStatusBadge.textContent = '● RECORDING (PTT)';
-        logBlePacket(`[MCU BUFFER] PTT Asserted -> Accumulating data chunks...`, 'tx');
-      } else if (s.includes('BUFFER')) {
-        bufferStatusBadge.classList.add('buffering');
-        bufferStatusBadge.textContent = 'BUFFERING DATA';
-      } else if (s.includes('PROCESS') || s.includes('READY')) {
-        bufferStatusBadge.classList.add('ready');
-        bufferStatusBadge.textContent = 'BUFFER FLUSHED';
-        logBlePacket(`[MCU BUFFER] Flushed ${byteCount} bytes (${packetCount} packets)`, 'success');
-      } else if (s.includes('SENT') || s.includes('DISPATCH')) {
-        bufferStatusBadge.classList.add('sent');
-        bufferStatusBadge.textContent = 'DISPATCHED ✓';
-      } else {
-        bufferStatusBadge.classList.add('idle');
-        bufferStatusBadge.textContent = 'BUFFER IDLE';
-      }
-    }
-  };
-
-  window.updateBleStatus = function(statusText, connected, deviceName, rssi) {
-    state.bleConnected = connected;
-    if (bleStatusPill) {
-      bleStatusPill.className = connected ? 'status-pill connected' : 'status-pill';
-      bleStatusPill.querySelector('.status-label').textContent = connected 
-        ? `BLE: Connected (${deviceName || 'FRDM-RW612'})` 
-        : `BLE: ${statusText || 'Scanning...'}`;
-    }
-    if (bleStateLabel) {
-      bleStateLabel.textContent = connected ? (deviceName || 'FRDM-RW612') : 'Scanning...';
-      bleStateLabel.className = connected ? 'buf-metric-val highlight' : 'buf-metric-val';
-    }
-    if (bleRssiLabel) {
-      bleRssiLabel.textContent = rssi ? `${rssi} dBm` : (connected ? '-48 dBm' : '-- dBm');
-    }
-  };
-
-  window.handleNativeVoiceCommand = function(text) {
-    if (!text) return;
-    transcriptDisplay.textContent = `"${text}"`;
-    processVoiceCommand(text);
-  };
-
-  // =========================================================================
-  // Advanced Closest Name & Fuzzy Contact Matching Engine
-  // Resolves misrecognized / misspelled speech transcriptions to closest contact
-  // =========================================================================
-
   const aliasMap = {
     'mom': ['mom', 'mother', 'mummy', 'mum', 'amma', 'maa', 'mommy', 'momma', 'aai', 'mataji'],
     'dad': ['dad', 'father', 'papa', 'daddy', 'dada', 'appa', 'pop', 'pops', 'pitaji', 'babuji'],
@@ -544,10 +1044,6 @@ document.addEventListener('DOMContentLoaded', () => {
     'friend': ['friend', 'buddy', 'mate', 'pal', 'yaar', 'dost']
   };
 
-  /**
-   * Damerau-Levenshtein distance calculation accounting for insertions,
-   * deletions, substitutions, and adjacent transpositions.
-   */
   function getDamerauLevenshtein(s1, s2) {
     const len1 = s1.length;
     const len2 = s2.length;
@@ -567,23 +1063,18 @@ document.addEventListener('DOMContentLoaded', () => {
       for (let j = 1; j <= len2; j++) {
         const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
         d[i][j] = Math.min(
-          d[i - 1][j] + 1,       // deletion
-          d[i][j - 1] + 1,       // insertion
-          d[i - 1][j - 1] + cost // substitution
+          d[i - 1][j] + 1,
+          d[i][j - 1] + 1,
+          d[i - 1][j - 1] + cost
         );
         if (i > 1 && j > 1 && s1[i - 1] === s2[j - 2] && s1[i - 2] === s2[j - 1]) {
-          d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + cost); // transposition
+          d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + cost);
         }
       }
     }
     return d[len1][len2];
   }
 
-  /**
-   * Phonetic simplification transformer for speech recognition sound-alikes:
-   * maps phonetic variants ('ph'->'f', 'sh'->'s', 'ck'/'c'/'q'->'k', 'wh'/'w'->'v', etc.)
-   * and collapses duplicate letters so misrecognized speech (e.g. "Ashis" vs "Ashish", "Alec" vs "Alex") matches.
-   */
   function phoneticSimplify(s) {
     if (!s) return '';
     let str = String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -599,7 +1090,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/dh/g, 'd')
       .replace(/bh/g, 'b')
       .replace(/kh/g, 'k')
-      .replace(/jh/g, 'j')
       .replace(/qu/g, 'k')
       .replace(/q/g, 'k')
       .replace(/x/g, 'ks')
@@ -617,355 +1107,179 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/ey/g, 'e')
       .replace(/y/g, 'i');
 
-    let result = '';
-    let prev = '';
+    let out = '';
+    let last = ' ';
     for (let i = 0; i < str.length; i++) {
-      const ch = str[i];
-      if (ch !== prev) {
-        result += ch;
-        prev = ch;
+      const c = str[i];
+      if (c !== last) {
+        out += c;
+        last = c;
       }
     }
-    return result;
+    return out;
   }
 
-  /**
-   * Computes similarity score [0.0..1.0] and edit distance between query and target
-   */
-  function computeSimilarity(query, target) {
-    const qClean = (query || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const tClean = (target || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  function computeContactSimilarity(spoken, contactName) {
+    const spClean = String(spoken || '').toLowerCase().trim();
+    const cClean = String(contactName || '').toLowerCase().trim();
 
-    if (!qClean || !tClean) return { score: 0, distance: 99 };
+    if (!spClean || !cClean) return 0;
+    if (spClean === cClean) return 1.0;
 
-    if (qClean === tClean) {
-      return { score: 1.0, distance: 0, isExact: true };
+    for (const [key, aliases] of Object.entries(aliasMap)) {
+      const contactIsAlias = cClean === key || aliases.includes(cClean);
+      const spokenIsAlias = spClean === key || aliases.includes(spClean);
+      if (contactIsAlias && spokenIsAlias) return 0.98;
     }
 
-    // Substring / containment match
-    if (tClean.includes(qClean) && qClean.length >= 2) {
-      const ratio = qClean.length / tClean.length;
-      return { score: 0.88 + 0.12 * ratio, distance: 0, isSubstring: true };
-    }
-    if (qClean.includes(tClean) && tClean.length >= 2) {
-      const ratio = tClean.length / qClean.length;
-      return { score: 0.85 + 0.12 * ratio, distance: 0, isSubstring: true };
+    if (cClean.includes(' ')) {
+      const tokens = cClean.split(/\s+/);
+      for (const t of tokens) {
+        if (spClean === t) return 0.92;
+      }
     }
 
-    // Prefix match with length ratio bonus
-    if (tClean.startsWith(qClean) && qClean.length >= 2) {
-      const ratio = qClean.length / tClean.length;
-      return { score: 0.90 + 0.10 * ratio, distance: 0, isPrefix: true };
-    }
-    if (qClean.startsWith(tClean) && tClean.length >= 2) {
-      const ratio = tClean.length / qClean.length;
-      return { score: 0.86 + 0.10 * ratio, distance: 0, isPrefix: true };
-    }
+    const dist = getDamerauLevenshtein(spClean, cClean);
+    const maxLen = Math.max(spClean.length, cClean.length);
+    if (maxLen === 0) return 0;
 
-    const dist = getDamerauLevenshtein(qClean, tClean);
-    const maxLen = Math.max(qClean.length, tClean.length);
-    const levSim = 1.0 - (dist / maxLen);
-
-    const qPhon = phoneticSimplify(qClean);
-    const tPhon = phoneticSimplify(tClean);
+    const stringSim = 1.0 - (dist / maxLen);
+    const phonSp = phoneticSimplify(spClean);
+    const phonC = phoneticSimplify(cClean);
     let phonSim = 0;
-    if (qPhon && qPhon === tPhon) {
-      phonSim = 1.0;
-    } else {
-      const pDist = getDamerauLevenshtein(qPhon, tPhon);
-      const pMax = Math.max(qPhon.length, tPhon.length);
-      phonSim = pMax > 0 ? 1.0 - (pDist / pMax) : 0;
+    if (phonSp && phonC) {
+      const pDist = getDamerauLevenshtein(phonSp, phonC);
+      phonSim = 1.0 - (pDist / Math.max(phonSp.length, phonC.length));
     }
 
-    const compositeScore = phonSim >= 0.88
-      ? Math.max(levSim, 0.82 + 0.18 * phonSim)
-      : (0.55 * levSim + 0.45 * phonSim);
-
-    return { score: compositeScore, distance: dist, phonSim, levSim };
+    const combined = (stringSim * 0.45) + (phonSim * 0.55);
+    return Math.max(0, Math.min(1, combined));
   }
 
-  /**
-   * Scores a candidate query against a Contact object, testing against
-   * full name, first name, last name, individual words, relations, and aliases.
-   */
-  function scoreContact(query, contact) {
-    if (!contact) return { score: 0, distance: 99, matchedTarget: '' };
-    const qClean = (query || '').toLowerCase().trim();
-    const cName = String(contact.name || '').toLowerCase().trim();
-    const cRelation = String(contact.relation || '').toLowerCase().trim();
-
+  function findClosestContact(query, contactsList) {
+    if (!contactsList || contactsList.length === 0 || !query) return null;
+    let best = null;
     let bestScore = 0;
-    let minDistance = 99;
-    let matchedTarget = '';
 
-    // 1. Full name
-    const full = computeSimilarity(qClean, cName);
-    if (full.score > bestScore) {
-      bestScore = full.score;
-      minDistance = full.distance;
-      matchedTarget = contact.name || '';
-    }
-
-    // 2. Name tokens (first name, last name, individual words)
-    const tokens = cName.split(/\s+/).filter(w => w.length >= 2);
-    for (const token of tokens) {
-      const t = computeSimilarity(qClean, token);
-      if (t.score > bestScore) {
-        bestScore = t.score;
-        minDistance = t.distance;
-        matchedTarget = token;
+    for (const c of contactsList) {
+      const score = computeContactSimilarity(query, c.name);
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
       }
     }
 
-    // 3. Relation
-    if (cRelation) {
-      const r = computeSimilarity(qClean, cRelation);
-      if (r.score > bestScore) {
-        bestScore = r.score;
-        minDistance = r.distance;
-        matchedTarget = contact.relation || '';
-      }
-    }
-
-    // 4. Aliases
-    for (const [key, synonyms] of Object.entries(aliasMap)) {
-      const matchesContact = synonyms.some(s => cName.includes(s) || (cRelation && cRelation.includes(s)));
-      if (matchesContact) {
-        for (const syn of synonyms) {
-          const sRes = computeSimilarity(qClean, syn);
-          if (sRes.score > bestScore) {
-            bestScore = sRes.score;
-            minDistance = sRes.distance;
-            matchedTarget = syn;
-          }
-        }
-      }
-    }
-
-    return { score: bestScore, distance: minDistance, matchedTarget };
+    return (best && bestScore >= 0.55) ? { contact: best, score: bestScore } : null;
   }
 
-  /**
-   * Finds the closest matching Contact in state.contacts for a candidate name query.
-   * Selects the highest similarity score that passes the acceptance threshold.
-   */
-  function findClosestContact(query, contactsList = state.contacts) {
-    if (!query || !contactsList || contactsList.length === 0) return null;
-    const cleanQ = query.trim();
-    const qLen = cleanQ.replace(/[^a-zA-Z0-9]/g, '').length;
-    if (qLen === 0) return null;
+  function resolveVoiceCommandToClosestMatch(spokenText, contactsList) {
+    const clean = String(spokenText || '').trim();
+    const prefixRegex = /^(?:send(?: a)? message to|send message|send sms to|message to|whatsapp to|whatsapp|tell|msg to)\s+/i;
+    const stripped = clean.replace(prefixRegex, '').trim();
 
-    let bestMatch = null;
-    let bestScore = 0;
-    let bestDist = 99;
-    let bestTarget = '';
-
-    for (const contact of contactsList) {
-      const res = scoreContact(cleanQ, contact);
-      if (res.score > bestScore) {
-        bestScore = res.score;
-        bestDist = res.distance;
-        bestTarget = res.matchedTarget;
-        bestMatch = contact;
-      }
-    }
-
-    if (!bestMatch) return null;
-
-    // Acceptance thresholds (adaptive to length)
-    let isAcceptable = false;
-    if (bestScore >= 0.80) {
-      isAcceptable = true;
-    } else if (qLen <= 4 && bestDist <= 1 && bestScore >= 0.60) {
-      isAcceptable = true; // "Jon" -> "John", "Alec" -> "Alex", "Mum" -> "Mom"
-    } else if (qLen >= 5 && qLen <= 8 && bestDist <= 2 && bestScore >= 0.60) {
-      isAcceptable = true; // "Ashis" -> "Ashish", "Docter" -> "Doctor"
-    } else if (qLen > 8 && bestDist <= 3 && bestScore >= 0.60) {
-      isAcceptable = true;
-    } else {
-      isAcceptable = bestScore >= 0.68;
-    }
-
-    if (isAcceptable) {
-      return {
-        contact: bestMatch,
-        score: bestScore,
-        distance: bestDist,
-        matchedTarget: bestTarget,
-        isExact: cleanQ.toLowerCase() === String(bestMatch.name || '').toLowerCase()
-      };
-    }
-    return null;
-  }
-
-  // Unified findContact calling closest match engine
-  function findContact(query) {
-    const res = findClosestContact(query);
-    return res ? res.contact : null;
-  }
-
-  // Compatibility helper
-  function getEditDistance(a, b) {
-    return getDamerauLevenshtein(a, b);
-  }
-
-  /**
-   * Contact-Aware Voice Command Parser (WhatsApp Dedicated)
-   * Resolves voice command to closest contact name (handling recognition misspellings),
-   * extracts message body, announces spoken feedback, and dispatches via WhatsApp.
-   */
-  function processVoiceCommand(rawText) {
-    const cleanText = rawText.trim();
-    transcriptDisplay.textContent = `"${cleanText}"`;
-    const now = new Date();
-    intentTime.textContent = now.toTimeString().split(' ')[0];
-
-    // 1. Comprehensive Conversational Trigger Prefixes
-    const prefixes = [
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?whatsapp\s+message\s+to\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?message\s+to\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?whatsapp\s+to\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?message\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+(?:a\s+)?whatsapp\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+to\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?send\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?whatsapp\s+to\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?whatsapp\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?message\s+to\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?message\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?text\s+to\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?text\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?tell\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?ask\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?say\s+to\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?notify\s+/i,
-      /^(?:please\s+)?(?:can\s+you\s+)?(?:could\s+you\s+)?contact\s+/i
-    ];
-
-    let stripped = cleanText;
-    for (const prefix of prefixes) {
-      const m = stripped.match(prefix);
-      if (m) {
-        stripped = stripped.substring(m[0].length).trim();
-        break;
-      }
-    }
-
-    // 2. Multi-Candidate Evaluation (Delimiters & Word Spans)
     const candidates = [];
 
-    // Delimiter Separation (-, :, that, saying, to say, please, telling, about)
-    const delimMatch = stripped.match(/^(.+?)\s*(?:[-:]|(?:\s+(?:that|saying|to say|please|telling|about)))\s+(.+)$/i);
+    const delimMatch = stripped.match(/^(.*?)(?:\s*[-:]\s*|\s+that\s+|\s+saying\s+|\s+to say\s+)(.*)$/i);
     if (delimMatch) {
       const query = delimMatch[1].trim();
       const rawBody = delimMatch[2].trim();
-      const match = findClosestContact(query);
-      if (match) {
-        const cleanBody = rawBody
-          .replace(/^[-:]\s*/, '')
-          .replace(/^(?:that|saying|to say)\s+/i, '')
-          .replace(/^["']|["']$/g, '')
-          .trim();
+      const res = findClosestContact(query, contactsList);
+      if (res) {
+        const cleanBody = rawBody.replace(/^[-:]\s*/i, '').replace(/^(?:that|saying|to say)\s+/i, '').replace(/^["']|["']$/g, '').trim();
+        const isExact = query.toLowerCase() === res.contact.name.toLowerCase();
         candidates.push({
-          contact: match.contact,
-          score: match.score + 0.05,
-          distance: match.distance,
-          query: query,
-          message: cleanBody,
-          isExact: match.isExact
+          contact: res.contact,
+          score: res.score + 0.05,
+          matchedCandidate: query,
+          remainderMessage: cleanBody,
+          isExact
         });
       }
     }
 
-    // N-gram word spans (1 to 3 words from start of stripped text)
     const words = stripped.split(/\s+/).filter(Boolean);
     const maxWords = Math.min(3, words.length);
-
     for (let count = 1; count <= maxWords; count++) {
-      const queryCandidate = words.slice(0, count).join(' ');
+      const query = words.slice(0, count).join(' ');
       const remainder = words.slice(count).join(' ');
-      const match = findClosestContact(queryCandidate);
-      if (match) {
-        const cleanBody = remainder
-          .replace(/^[-:]\s*/, '')
-          .replace(/^(?:that|saying|to say)\s+/i, '')
-          .replace(/^["']|["']$/g, '')
-          .trim();
-        const multiWordBonus = (count > 1 && String(match.contact.name || '').includes(' ')) ? 0.08 : 0;
+      const res = findClosestContact(query, contactsList);
+      if (res) {
+        const cleanBody = remainder.replace(/^[-:]\s*/i, '').replace(/^(?:that|saying|to say)\s+/i, '').replace(/^["']|["']$/g, '').trim();
+        const isExact = query.toLowerCase() === res.contact.name.toLowerCase();
+        const bonus = (count > 1 && res.contact.name.includes(' ')) ? 0.08 : 0.0;
         candidates.push({
-          contact: match.contact,
-          score: match.score + multiWordBonus,
-          distance: match.distance,
-          query: queryCandidate,
-          message: cleanBody,
-          isExact: match.isExact
+          contact: res.contact,
+          score: res.score + bonus,
+          matchedCandidate: query,
+          remainderMessage: cleanBody,
+          isExact
         });
       }
     }
 
-    // Select the candidate with the highest similarity score
+    if (candidates.length === 0) return null;
     candidates.sort((a, b) => b.score - a.score);
-    const champion = candidates[0] || null;
+    return candidates[0];
+  }
 
-    if (champion) {
-      const resolvedContact = champion.contact;
-      let messageBody = champion.message;
-      if (!messageBody) {
-        messageBody = 'Hello, this is a voice message from VoxAssist.';
+  // =========================================================================
+  // Process Voice Commands & NLP Dispatcher
+  // =========================================================================
+  function processVoiceCommand(commandText) {
+    const cleanText = String(commandText || '').trim();
+    if (!cleanText) return;
+
+    const lower = cleanText.toLowerCase();
+
+    if (lower.includes('read out') || lower.includes('what is the reply') || lower.includes('read reply') || lower.includes('what did') || lower.includes('read message')) {
+      readOutLastReply();
+      return;
+    }
+
+    const match = resolveVoiceCommandToClosestMatch(cleanText, state.contacts);
+
+    if (intentTime) {
+      intentTime.textContent = new Date().toLocaleTimeString();
+    }
+
+    if (match) {
+      const resolvedContact = match.contact;
+      let messageBody = match.remainderMessage || 'Hello, this is an automated voice message from VoxAssist.';
+
+      if (intentStatusBadge) {
+        intentStatusBadge.textContent = 'READY TO DISPATCH';
+        intentStatusBadge.className = 'intent-status-badge success';
       }
+      if (intentContact) intentContact.textContent = resolvedContact.name;
+      if (intentPhone) intentPhone.textContent = resolvedContact.phone;
+      if (intentMessage) intentMessage.textContent = `"${messageBody}"`;
 
-      const isExactMatch = champion.isExact;
-      if (isExactMatch) {
-        intentStatusBadge.textContent = 'WHATSAPP READY';
-        intentStatusBadge.className = 'intent-status-badge parsed';
-        intentContact.textContent = resolvedContact.name;
-        speakAloud(`Sending WhatsApp message to ${resolvedContact.name}: "${messageBody}".`);
-        logBlePacket(`[WHATSAPP DISPATCH] Recipient: ${resolvedContact.name} (${resolvedContact.phone})`, 'success');
-      } else {
-        // Misrecognized / fuzzy closest match
-        intentStatusBadge.textContent = 'MATCHED (CLOSEST)';
-        intentStatusBadge.className = 'intent-status-badge closest';
-        intentContact.innerHTML = `${escapeHtml(resolvedContact.name)} <span class="closest-tag" title="Matched from '${escapeHtml(champion.query)}'">Matched from "${escapeHtml(champion.query)}" (${Math.round(champion.score * 100)}%)</span>`;
-        speakAloud(`Matched closest contact ${resolvedContact.name} for ${champion.query}. Sending WhatsApp message: "${messageBody}".`);
-        logBlePacket(`[CLOSEST MATCH] Resolved "${champion.query}" -> ${resolvedContact.name} (${Math.round(champion.score * 100)}% match)`, 'success');
-      }
-
-      intentPhone.textContent = resolvedContact.phone;
-      intentMessage.textContent = messageBody;
       playSuccessChime();
 
-      // Update buffer telemetry
-      window.updateBufferTelemetry('SENT', state.bufferedPacketsCount, state.bufferedBytesCount, `To ${resolvedContact.name}: ${messageBody}`);
-
-      // Add to outbox history
-      addMessageToOutbox(resolvedContact, messageBody);
-
-      // Send via Native Android Bridge
-      if (window.AndroidBridge && typeof window.AndroidBridge.sendWhatsApp === 'function') {
-        try {
-          window.AndroidBridge.sendWhatsApp(resolvedContact.phone, messageBody, resolvedContact.name);
-        } catch (e) {
-          console.warn('AndroidBridge WhatsApp dispatch error:', e);
-        }
+      if (match.isExact) {
+        speakAloud(`Sending WhatsApp message to ${resolvedContact.name} automatically.`);
       } else {
-        // Browser fallback
+        speakAloud(`Matched closest contact ${resolvedContact.name} for ${match.matchedCandidate}. Sending WhatsApp message automatically.`);
+      }
+
+      addMessageToOutbox(resolvedContact, messageBody);
+      logBlePacket(`[DISPATCH] Target Contact: ${resolvedContact.name} (${resolvedContact.phone})`, 'success');
+
+      if (window.AndroidBridge && typeof window.AndroidBridge.sendWhatsApp === 'function') {
+        window.AndroidBridge.sendWhatsApp(resolvedContact.phone, messageBody, resolvedContact.name);
+      } else {
         let cleanPhone = String(resolvedContact.phone || '').replace(/[^0-9+]/g, '');
         if (cleanPhone.startsWith('+')) cleanPhone = cleanPhone.substring(1);
         if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
         window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(messageBody)}`, '_blank');
       }
     } else {
-      // Contact could not be identified
-      intentStatusBadge.textContent = 'CONTACT NOT FOUND';
-      intentStatusBadge.className = 'intent-status-badge failed';
-      intentContact.textContent = `"${stripped.split(' ')[0] || 'Unknown'}" (?)`;
-      intentPhone.textContent = 'Not in Contacts';
-      intentMessage.textContent = cleanText;
-
+      if (intentStatusBadge) {
+        intentStatusBadge.textContent = 'CONTACT NOT FOUND';
+        intentStatusBadge.className = 'intent-status-badge failed';
+      }
       playErrorChime();
-      const topNames = state.contacts.slice(0, 3).map(c => c.name).filter(Boolean).join(', ');
-      speakAloud(`Could not find ${stripped.split(' ')[0] || 'that contact'}. Available contacts include: ${topNames}.`);
-      logBlePacket(`[PARSER] Unresolved contact query in: "${cleanText}"`, 'err');
+      speakAloud('Could not recognize who to send the message to. Please say: Send message to Contact Name, followed by your message.');
     }
   }
 
@@ -989,8 +1303,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderOutbox() {
+    if (!outboxList) return;
+
     if (state.outbox.length === 0) {
-      outboxList.innerHTML = '<p class="empty-state">No WhatsApp messages dispatched yet. Trigger a voice command above.</p>';
+      outboxList.innerHTML = '<p class="empty-state">No WhatsApp messages dispatched yet. Trigger a voice command on the left.</p>';
       return;
     }
 
@@ -1002,13 +1318,9 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="outbox-body">"${escapeHtml(msg.text)}"</div>
         <div class="outbox-footer">
-          <span>WhatsApp Chat: Opened ✓</span>
+          <span>WhatsApp Auto-Send: Active ✓</span>
           <button class="speak-sms-btn" data-text="WhatsApp message to ${escapeHtml(msg.recipientName)}: ${escapeHtml(msg.text)}">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-            </svg>
-            Speak Aloud
+            🔊 Speak Aloud
           </button>
         </div>
       </div>
@@ -1021,383 +1333,108 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  clearOutboxBtn.addEventListener('click', () => {
-    state.outbox = [];
-    renderOutbox();
-  });
-
-  // =========================================================================
-  // Contact Directory Rendering, Filtering & Highlighting
-  // =========================================================================
-  function highlightText(text, query) {
-    if (!text) return '';
-    const safeText = String(text);
-    if (!query) return escapeHtml(safeText);
-    const cleanQ = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (!cleanQ) return escapeHtml(safeText);
-    const regex = new RegExp(`(${cleanQ})`, 'gi');
-    return escapeHtml(safeText).replace(regex, '<span class="match-highlight">$1</span>');
+  if (clearOutboxBtn) {
+    clearOutboxBtn.addEventListener('click', () => {
+      state.outbox = [];
+      renderOutbox();
+    });
   }
 
-  function contactMatchesCategory(c, category) {
-    if (!category || category === 'all') return true;
-    const cat = category.toLowerCase().trim();
-    const rel = String(c.relation || '').toLowerCase();
-    const name = String(c.name || '').toLowerCase();
+  // =========================================================================
+  // Contact Directory Rendering & Filtering
+  // =========================================================================
+  function renderContacts() {
+    if (!contactsList) return;
 
-    if (cat === 'family') {
-      return rel.includes('family') ||
-        /\b(mom|mother|mummy|mum|amma|maa|dad|father|papa|daddy|dada|appa|sister|sis|didi|brother|bro|bhai|bhaiya|wife|husband|son|daughter|grandma|grandpa|nani|dadi|uncle|aunt|chacha|mama)\b/i.test(name) ||
-        /\b(mom|mother|mummy|mum|dad|father|papa|sister|brother|wife|husband)\b/i.test(rel);
-    }
-    if (cat === 'medical') {
-      return rel.includes('medical') ||
-        /\b(doctor|dr|dr\.|clinic|hospital|physician|dentist|doc|med)\b/i.test(name) ||
-        /\b(medical|doctor|clinic|hospital)\b/i.test(rel);
-    }
-    if (cat === 'friend') {
-      return rel.includes('friend') ||
-        /\b(friend|buddy|mate|pal|yaar|dost)\b/i.test(rel) ||
-        (!rel.includes('family') && !rel.includes('medical') && !rel.includes('caregiver'));
-    }
-    if (cat === 'caregiver') {
-      return rel.includes('caregiver') ||
-        /\b(caregiver|nurse|assistant|helper|attendant|carer|guardian)\b/i.test(name) ||
-        /\b(caregiver|nurse|assistant|helper|attendant|carer)\b/i.test(rel);
-    }
-    if (cat === 'phone') {
-      return rel.includes('phone') || rel.includes('device') || rel.includes('contact');
-    }
-    return rel.includes(cat) || name.includes(cat);
-  }
+    const query = contactSearchInput ? contactSearchInput.value.trim().toLowerCase() : '';
+    let filtered = state.contacts;
 
-  function renderContacts(listToRender = null, searchQuery = '') {
-    if (!listToRender) {
-      const q = (contactSearchInput ? contactSearchInput.value : '').toLowerCase().trim();
-      searchQuery = q;
-      const allContacts = state.contacts || [];
-
-      if (!q) {
-        // No search query: filter strictly by category chip
-        listToRender = allContacts.filter(c => contactMatchesCategory(c, state.activeFilterCategory));
-      } else {
-        // Multi-tier Search Filter:
-        // 1. Direct Substring Matches (name, phone, relation)
-        const exactMatches = [];
-        const nonExactCandidates = [];
-        const cleanQDigits = q.replace(/[^0-9]/g, '');
-
-        for (const c of allContacts) {
-          const cName = String(c.name || '').toLowerCase();
-          const cPhone = String(c.phone || '');
-          const cCleanPhone = cPhone.replace(/[^0-9]/g, '');
-          const cRel = String(c.relation || '').toLowerCase();
-
-          const nameMatch = cName.includes(q);
-          const phoneMatch = (cleanQDigits.length >= 2 && cCleanPhone.includes(cleanQDigits)) || cPhone.toLowerCase().includes(q);
-          const relationMatch = cRel.includes(q);
-
-          if (nameMatch || phoneMatch || relationMatch) {
-            exactMatches.push({
-              ...c,
-              _matchType: 'exact',
-              _score: nameMatch ? 1.0 : 0.9
-            });
-          } else {
-            nonExactCandidates.push(c);
-          }
-        }
-
-        // 2. Fuzzy & Closest Spelling Matches
-        const fuzzyMatches = [];
-        for (const c of nonExactCandidates) {
-          const res = scoreContact(q, c);
-          if (res.score >= 0.60 || res.distance <= 2) {
-            fuzzyMatches.push({
-              ...c,
-              _matchType: 'fuzzy',
-              _score: res.score,
-              _matchedTarget: res.matchedTarget
-            });
-          }
-        }
-
-        // Sort fuzzy matches by similarity score descending
-        fuzzyMatches.sort((a, b) => b._score - a._score);
-
-        // Combine exact first, then fuzzy matches
-        let combined = [...exactMatches, ...fuzzyMatches];
-
-        // If category filter is active (and not 'all'), prioritize in-category matches
-        if (state.activeFilterCategory && state.activeFilterCategory !== 'all') {
-          const inCat = combined.filter(c => contactMatchesCategory(c, state.activeFilterCategory));
-          if (inCat.length > 0) {
-            combined = inCat;
-          }
-        }
-
-        listToRender = combined;
-      }
+    if (state.activeFilterCategory && state.activeFilterCategory !== 'all') {
+      const cat = state.activeFilterCategory.toLowerCase();
+      filtered = filtered.filter(c => (c.relation || '').toLowerCase().includes(cat));
     }
 
-    // Update contacts count badge
+    if (query) {
+      filtered = filtered.filter(c =>
+        c.name.toLowerCase().includes(query) ||
+        c.phone.includes(query) ||
+        (c.relation && c.relation.toLowerCase().includes(query))
+      );
+    }
+
     if (contactsCountBadge) {
-      const total = (state.contacts || []).length;
-      if (!searchQuery && state.activeFilterCategory === 'all') {
-        contactsCountBadge.textContent = `${total} contacts`;
-      } else {
-        contactsCountBadge.textContent = `Showing ${listToRender.length} of ${total}`;
-      }
+      contactsCountBadge.textContent = `${filtered.length} contacts`;
     }
 
-    // Handle Empty State
-    if (listToRender.length === 0) {
-      contactsList.innerHTML = `
-        <div class="empty-state">
-          <p>No contacts found matching "${escapeHtml(searchQuery || state.activeFilterCategory)}".</p>
-          <button class="small-outline-btn" id="resetContactFilterBtn" style="margin-top: 8px;">Reset Filter</button>
-        </div>
-      `;
-      const resetBtn = document.getElementById('resetContactFilterBtn');
-      if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
-          if (contactSearchInput) contactSearchInput.value = '';
-          if (clearSearchBtn) clearSearchBtn.hidden = true;
-          state.activeFilterCategory = 'all';
-          updateActiveFilterChip();
-          renderContacts();
-          if (contactSearchInput) contactSearchInput.focus();
-        });
-      }
+    if (filtered.length === 0) {
+      contactsList.innerHTML = '<p class="empty-state">No contacts found matching search.</p>';
       return;
     }
 
-    // Render Contact Items
-    contactsList.innerHTML = listToRender.map(c => {
-      const name = String(c.name || 'Unknown');
-      const phone = String(c.phone || '');
-      const relation = String(c.relation || 'Contact');
-      const firstChar = (name.trim().charAt(0) || '?').toUpperCase();
-      const isFuzzy = c._matchType === 'fuzzy' || (searchQuery && !name.toLowerCase().includes(searchQuery) && !phone.includes(searchQuery));
-      const scorePct = c._score ? Math.round(c._score * 100) : null;
-
-      return `
-        <div class="contact-item" data-name="${escapeHtml(name)}" data-phone="${escapeHtml(phone)}" title="Tap to send WhatsApp to ${escapeHtml(name)}">
-          <div class="contact-info-wrap">
-            <div class="contact-avatar">${escapeHtml(firstChar)}</div>
-            <div class="contact-meta">
-              <span class="contact-name">${highlightText(name, searchQuery)}${isFuzzy ? ` <span class="closest-match-tag">Closest Match${scorePct ? ` (${scorePct}%)` : ''}</span>` : ''}</span>
-              <span class="contact-phone">${highlightText(phone, searchQuery)}</span>
-            </div>
-          </div>
-          <div class="contact-item-actions">
-            <span class="contact-relation">${highlightText(relation, searchQuery)}</span>
-            <button class="contact-action-btn quick-send-btn" title="Send WhatsApp to ${escapeHtml(name)}">💬 WhatsApp</button>
-          </div>
+    contactsList.innerHTML = filtered.map(c => `
+      <div class="contact-card" data-name="${escapeHtml(c.name)}" data-phone="${escapeHtml(c.phone)}">
+        <div class="contact-avatar">${escapeHtml(c.name.charAt(0).toUpperCase())}</div>
+        <div class="contact-details">
+          <div class="contact-name">${escapeHtml(c.name)}</div>
+          <div class="contact-phone">${escapeHtml(c.phone)}</div>
+          ${c.relation ? `<span class="contact-rel-badge">${escapeHtml(c.relation)}</span>` : ''}
         </div>
-      `;
-    }).join('');
+        <button class="quick-send-btn" title="Quick voice message to ${escapeHtml(c.name)}">
+          💬 Send
+        </button>
+      </div>
+    `).join('');
 
-    // Smooth scroll to top of list when filter changes
-    contactsList.scrollTop = 0;
-
-    // Attach click handlers
-    contactsList.querySelectorAll('.contact-item').forEach(item => {
-      const name = item.getAttribute('data-name');
-      const phone = item.getAttribute('data-phone');
-
-      item.querySelector('.quick-send-btn')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const testCmd = `Send message to ${name} - Hello, I am sending this voice test from VoxAssist.`;
-        processVoiceCommand(testCmd);
-      });
-
-      item.addEventListener('click', () => {
-        const testCmd = `Send message to ${name} - I am on my way.`;
-        processVoiceCommand(testCmd);
+    contactsList.querySelectorAll('.contact-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const name = card.getAttribute('data-name');
+        processVoiceCommand(`Send message to ${name} - I am on my way.`);
       });
     });
   }
-  renderContacts();
 
-  // Instant Live Search Filter Handlers (input, keyup, search, change)
   if (contactSearchInput) {
-    const handleSearchInput = (e) => {
-      const q = (e.target.value || '').trim();
-      if (clearSearchBtn) {
-        clearSearchBtn.hidden = !q;
-      }
-      renderContacts(null, q.toLowerCase());
-    };
-
-    ['input', 'keyup', 'search', 'change'].forEach(ev => {
-      contactSearchInput.addEventListener(ev, handleSearchInput);
+    contactSearchInput.addEventListener('input', () => {
+      if (clearSearchBtn) clearSearchBtn.hidden = !contactSearchInput.value;
+      renderContacts();
     });
   }
 
-  // Clear Search Button Handler
   if (clearSearchBtn) {
     clearSearchBtn.addEventListener('click', () => {
-      if (contactSearchInput) {
-        contactSearchInput.value = '';
-        contactSearchInput.focus();
-      }
+      contactSearchInput.value = '';
       clearSearchBtn.hidden = true;
       renderContacts();
     });
   }
 
-  // Voice Search Mic in Search Bar
-  if (voiceSearchBtn) {
-    let searchRecognition = null;
-    voiceSearchBtn.addEventListener('click', () => {
-      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRec) {
-        speakAloud('Voice search is not supported on this browser. Type in the search box.');
-        return;
-      }
-
-      if (searchRecognition) {
-        searchRecognition.abort();
-        searchRecognition = null;
-        voiceSearchBtn.classList.remove('listening');
-        return;
-      }
-
-      try {
-        searchRecognition = new SpeechRec();
-        searchRecognition.lang = 'en-US';
-        searchRecognition.continuous = false;
-        searchRecognition.interimResults = false;
-
-        voiceSearchBtn.classList.add('listening');
-        playStartChime();
-        speakAloud('Listening for contact name to search...');
-
-        searchRecognition.onresult = (event) => {
-          const spoken = event.results[0][0].transcript.trim().replace(/[.]/g, '');
-          if (contactSearchInput) {
-            contactSearchInput.value = spoken;
-            if (clearSearchBtn) clearSearchBtn.hidden = false;
-            renderContacts(null, spoken.toLowerCase());
-            speakAloud(`Searching for ${spoken}`);
-          }
-        };
-
-        searchRecognition.onerror = (err) => {
-          console.warn('Voice search error:', err);
-          voiceSearchBtn.classList.remove('listening');
-          searchRecognition = null;
-        };
-
-        searchRecognition.onend = () => {
-          voiceSearchBtn.classList.remove('listening');
-          searchRecognition = null;
-        };
-
-        searchRecognition.start();
-      } catch (err) {
-        console.warn('Could not start voice search:', err);
-        voiceSearchBtn.classList.remove('listening');
-      }
-    });
-  }
-
-  // Category Filter Chips Handler
-  function updateActiveFilterChip() {
-    if (contactFilterChips) {
-      contactFilterChips.querySelectorAll('.filter-chip').forEach(chip => {
-        const cat = chip.getAttribute('data-filter');
-        chip.classList.toggle('active', cat === state.activeFilterCategory);
-      });
-    }
-  }
-
   if (contactFilterChips) {
     contactFilterChips.querySelectorAll('.filter-chip').forEach(chip => {
       chip.addEventListener('click', () => {
-        state.activeFilterCategory = chip.getAttribute('data-filter');
-        updateActiveFilterChip();
+        contactFilterChips.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        state.activeFilterCategory = chip.getAttribute('data-filter') || 'all';
         renderContacts();
       });
     });
   }
 
-  // =========================================================================
-  // Microcontroller Buffer Simulation Controls
-  // =========================================================================
-  if (simulateBlePttBtn) {
-    simulateBlePttBtn.addEventListener('click', () => {
-      // Pick random contact from state.contacts
-      const contact = state.contacts[Math.floor(Math.random() * state.contacts.length)] || { name: 'Mom' };
-      const testMsg = `Send message to ${contact.name} - Please call me when you are free`;
-
-      logBlePacket(`[MCU SIM] Simulating PTT Press & Audio Stream from FRDM-RW612...`, 'tx');
-
-      // 1. Send START Opcode (0x01)
-      if (window.AndroidBridge && typeof window.AndroidBridge.simulateBlePacket === 'function') {
-        window.AndroidBridge.simulateBlePacket(1, '');
-      } else {
-        window.updateBufferTelemetry('RECORDING', 0, 0, 'Microcontroller PTT Pressed');
+  window.loadDeviceContacts = function(deviceContactsData) {
+    try {
+      let contactsList = deviceContactsData;
+      if (typeof deviceContactsData === 'string') {
+        contactsList = JSON.parse(deviceContactsData);
       }
-
-      // 2. Stream Data Chunks (Opcode 0x02)
-      let packetIdx = 0;
-      const totalPackets = 8;
-      const streamInterval = setInterval(() => {
-        packetIdx++;
-        const currentBytes = packetIdx * 64;
-        const partialText = testMsg.substring(0, Math.floor((packetIdx / totalPackets) * testMsg.length));
-
-        if (window.AndroidBridge && typeof window.AndroidBridge.simulateBlePacket === 'function') {
-          window.AndroidBridge.simulateBlePacket(2, partialText);
-        } else {
-          window.updateBufferTelemetry('BUFFERING', packetIdx, currentBytes, partialText);
-        }
-
-        if (packetIdx >= totalPackets) {
-          clearInterval(streamInterval);
-
-          // 3. Send END Opcode (0x03) -> Flushes and triggers WhatsApp!
-          setTimeout(() => {
-            logBlePacket(`[MCU SIM] PTT Released -> Buffer Flushed -> Processing payload!`, 'success');
-            if (window.AndroidBridge && typeof window.AndroidBridge.simulateBlePacket === 'function') {
-              window.AndroidBridge.simulateBlePacket(3, '');
-            } else {
-              window.updateBufferTelemetry('PROCESSING', totalPackets, totalPackets * 64, testMsg);
-              setTimeout(() => {
-                processVoiceCommand(testMsg);
-              }, 400);
-            }
-          }, 300);
-        }
-      }, 150);
-    });
-  }
-
-  if (flushBufferBtn) {
-    flushBufferBtn.addEventListener('click', () => {
-      if (window.AndroidBridge && typeof window.AndroidBridge.simulateBlePacket === 'function') {
-        window.AndroidBridge.simulateBlePacket(3, '');
-      } else {
-        const preview = state.bufferedPayloadPreview || 'Send message to Mom - I am home';
-        processVoiceCommand(preview);
+      if (Array.isArray(contactsList) && contactsList.length > 0) {
+        state.contacts = contactsList;
+        renderContacts();
+        logBlePacket(`[CONTACTS] Synced ${contactsList.length} real phone contacts`, 'success');
       }
-    });
-  }
+    } catch (e) {
+      console.error('Failed to parse device contacts:', e);
+    }
+  };
 
-  if (clearBufferBtn) {
-    clearBufferBtn.addEventListener('click', () => {
-      if (window.AndroidBridge && typeof window.AndroidBridge.clearBleBuffer === 'function') {
-        window.AndroidBridge.clearBleBuffer();
-      } else {
-        window.updateBufferTelemetry('IDLE', 0, 0, 'Buffer cleared');
-      }
-      speakAloud('Buffer memory cleared.');
-    });
-  }
-
-  // Accessibility Auto-Send Status Handler
   window.setAccessibilityStatus = function(isEnabled) {
     if (a11yBanner) {
       if (isEnabled) {
@@ -1408,8 +1445,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <span>WhatsApp messages are sent automatically without touching the screen.</span>
           </div>
         `;
-        a11yBanner.style.borderColor = 'rgba(37, 211, 102, 0.6)';
-        a11yBanner.style.background = 'rgba(37, 211, 102, 0.12)';
+        a11yBanner.style.borderColor = '#86efac';
+        a11yBanner.style.background = '#f0fdf4';
       } else {
         a11yBanner.hidden = false;
       }
@@ -1421,47 +1458,51 @@ document.addEventListener('DOMContentLoaded', () => {
       if (window.AndroidBridge && typeof window.AndroidBridge.openAccessibilitySettings === 'function') {
         window.AndroidBridge.openAccessibilitySettings();
       } else {
-        alert('To enable Hands-Free Auto-Send on your phone:\n\n1. Open Settings > Accessibility.\n2. Tap "Installed Apps" or "VoxAssist".\n3. Turn VoxAssist ON.\n\nNow messages will send automatically without tapping Send in WhatsApp!');
+        alert('To enable Hands-Free Auto-Send on your phone:\n\n1. Open Settings > Accessibility.\n2. Tap "Installed Apps" or "VoxAssist".\n3. Turn VoxAssist ON.');
       }
     });
   }
 
-  // Add Contact Modal Handlers
-  openAddContactBtn.addEventListener('click', () => {
-    contactModalBackdrop.hidden = false;
-    document.getElementById('newContactName').focus();
-  });
-
-  function closeContactModal() {
-    contactModalBackdrop.hidden = true;
-    addContactForm.reset();
+  // Modal Handlers
+  if (openAddContactBtn) {
+    openAddContactBtn.addEventListener('click', () => {
+      if (contactModalBackdrop) contactModalBackdrop.hidden = false;
+      document.getElementById('newContactName')?.focus();
+    });
   }
 
-  closeModalBtn.addEventListener('click', closeContactModal);
-  cancelModalBtn.addEventListener('click', closeContactModal);
+  function closeContactModal() {
+    if (contactModalBackdrop) contactModalBackdrop.hidden = true;
+    if (addContactForm) addContactForm.reset();
+  }
 
-  addContactForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const name = document.getElementById('newContactName').value.trim();
-    const phone = document.getElementById('newContactPhone').value.trim();
-    const relation = document.getElementById('newContactRelation').value.trim() || 'Custom';
+  if (closeModalBtn) closeModalBtn.addEventListener('click', closeContactModal);
+  if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeContactModal);
 
-    if (name && phone) {
-      state.contacts.unshift({ id: Date.now(), name, phone, relation });
-      localStorage.setItem('voxassist_contacts', JSON.stringify(state.contacts));
-      renderContacts();
-      closeContactModal();
-      speakAloud(`Added ${name} to contacts.`);
-      logBlePacket(`[CONTACTS] Added new entry: ${name} (${phone})`, 'success');
-    }
-  });
+  if (addContactForm) {
+    addContactForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('newContactName').value.trim();
+      const phone = document.getElementById('newContactPhone').value.trim();
+      const relation = document.getElementById('newContactRelation').value.trim() || 'Custom';
 
-  // Preset Buttons
+      if (name && phone) {
+        state.contacts.unshift({ id: Date.now(), name, phone, relation });
+        localStorage.setItem('voxassist_contacts', JSON.stringify(state.contacts));
+        renderContacts();
+        closeContactModal();
+        speakAloud(`Added ${name} to contacts.`);
+        logBlePacket(`[CONTACTS] Added new entry: ${name} (${phone})`, 'success');
+      }
+    });
+  }
+
+  // Presets
   presetButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const command = btn.getAttribute('data-command');
       playStartChime();
-      transcriptDisplay.textContent = `"${command}"`;
+      if (transcriptDisplay) transcriptDisplay.textContent = `"${command}"`;
       state.currentTranscript = command;
       logBlePacket(`[PRESET] Injected voice sample: "${command}"`);
       setTimeout(() => {
@@ -1470,13 +1511,82 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // =========================================================================
-  // BLE Terminal Logger & Helpers
-  // =========================================================================
+  // Microcontroller Buffer Telemetry
+  window.updateBufferTelemetry = function(stateName, packetCount, byteCount, preview) {
+    if (bufPacketCount) bufPacketCount.textContent = `${packetCount} pkts`;
+    if (bufByteCount) bufByteCount.textContent = `${(byteCount / 1024).toFixed(1)} KB`;
+
+    if (bufferProgressBar) {
+      const pct = Math.min(100, Math.floor((byteCount / 4096) * 100));
+      bufferProgressBar.style.width = `${pct}%`;
+    }
+
+    if (bufferPreviewBox) {
+      bufferPreviewBox.textContent = preview || (byteCount > 0 ? `Accumulated Audio PCM (${byteCount} bytes)...` : 'Buffer is empty. Waiting for AUX PTT trigger...');
+    }
+
+    if (bufferStatusBadge) {
+      const s = (stateName || '').toUpperCase();
+      bufferStatusBadge.className = 'buffer-status-badge';
+      if (s.includes('RECORD')) {
+        bufferStatusBadge.classList.add('recording');
+        bufferStatusBadge.textContent = '● RECORDING (AUX)';
+        logBlePacket('[MCU BUFFER] AUX PTT Asserted -> Streaming PCM chunks...', 'tx');
+      } else if (s.includes('BUFFER')) {
+        bufferStatusBadge.classList.add('buffering');
+        bufferStatusBadge.textContent = 'BUFFERING DATA';
+      } else if (s.includes('PROCESS') || s.includes('READY')) {
+        bufferStatusBadge.classList.add('ready');
+        bufferStatusBadge.textContent = 'BUFFER FLUSHED';
+        logBlePacket(`[MCU BUFFER] Flushed ${byteCount} bytes (${packetCount} packets)`, 'success');
+      } else if (s.includes('SENT') || s.includes('DISPATCH')) {
+        bufferStatusBadge.classList.add('sent');
+        bufferStatusBadge.textContent = 'DISPATCHED ✓';
+      } else {
+        bufferStatusBadge.classList.add('idle');
+        bufferStatusBadge.textContent = 'BUFFER IDLE';
+      }
+    }
+  };
+
+  if (simulateBlePttBtn) {
+    simulateBlePttBtn.addEventListener('click', () => {
+      logBlePacket('[TEST] Simulating MCU AUX Voice Input Stream...');
+      playStartChime();
+      updateBufferTelemetry('RECORDING', 0, 0, 'AUX PTT Pressed on FRDM-MCXW71');
+
+      let pkts = 0;
+      const interval = setInterval(() => {
+        pkts++;
+        updateBufferTelemetry('BUFFERING', pkts, pkts * 240, `Send message to Mom - I am outside clinic`);
+        if (pkts >= 5) {
+          clearInterval(interval);
+          updateBufferTelemetry('PROCESSING', pkts, pkts * 240, 'Flushing buffer...');
+          setTimeout(() => {
+            processVoiceCommand('Send message to Mom - I am outside the clinic, please pick me up');
+          }, 400);
+        }
+      }, 150);
+    });
+  }
+
+  if (flushBufferBtn) {
+    flushBufferBtn.addEventListener('click', () => {
+      processVoiceCommand('Send message to Mom - I am on my way.');
+    });
+  }
+
+  if (clearBufferBtn) {
+    clearBufferBtn.addEventListener('click', () => {
+      updateBufferTelemetry('IDLE', 0, 0, 'Buffer cleared');
+    });
+  }
+
   function logBlePacket(msg, type = 'tx') {
     state.txPacketCount++;
-    txPktCount.textContent = `TX: ${state.txPacketCount} pkts`;
+    if (txPktCount) txPktCount.textContent = `TX: ${state.txPacketCount} pkts`;
 
+    if (!blePacketLog) return;
     const line = document.createElement('div');
     line.className = `log-line ${type}`;
     const timestamp = new Date().toISOString().split('T')[1].slice(0, 8);
@@ -1493,40 +1603,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return hex.trim() + '...';
   }
 
-  reconnectBleBtn.addEventListener('click', () => {
-    logBlePacket('[BLE] Initiating peripheral discovery...');
-    bleStatusPill.className = 'status-pill';
-    bleStatusPill.querySelector('.status-label').textContent = 'BLE: Scanning...';
-    setTimeout(() => {
-      bleStatusPill.className = 'status-pill connected';
-      bleStatusPill.querySelector('.status-label').textContent = 'BLE: Connected (FRDM-RW612)';
-      logBlePacket('[BLE] Re-connected to FRDM-RW612 EdgeFast peripheral', 'success');
-      playSuccessChime();
-      speakAloud('Bluetooth reconnected.');
-    }, 900);
-  });
-
-  ttsVoiceToggleBtn.addEventListener('click', () => {
-    state.ttsEnabled = !state.ttsEnabled;
-    if (state.ttsEnabled) {
-      ttsBtnText.textContent = 'Spoken Feedback: ON';
-      ttsStatusPill.className = 'status-pill connected';
-      ttsStatusPill.querySelector('.status-label').textContent = 'TTS Audio: Active';
-      speakAloud('Spoken feedback enabled.');
-    } else {
-      if (state.speechSynthesis) state.speechSynthesis.cancel();
-      ttsBtnText.textContent = 'Spoken Feedback: OFF';
-      ttsStatusPill.className = 'status-pill';
-      ttsStatusPill.querySelector('.status-label').textContent = 'TTS Audio: Muted';
-    }
-  });
-
   function escapeHtml(str) {
     if (str == null) return '';
     return String(str).replace(/[&<>'"]/g, 
       tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
     );
   }
+
+  // Initial UI Render
+  renderContacts();
+  renderOutbox();
+  renderReplies();
+  renderScannedDevices();
+  updateConnectedDeviceUI();
 
   // PWA Service Worker
   if ('serviceWorker' in navigator) {
