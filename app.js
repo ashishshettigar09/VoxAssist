@@ -47,28 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
         announced: true
       }
     ],
-    scannedDevices: [
-      {
-        name: 'FRDM-MCXW71-VOX',
-        address: '00:04:9F:8A:2B:10',
-        rssi: -42,
-        isTargetMcu: true,
-        serviceUuid: '0xFFF0'
-      },
-      {
-        name: 'FRDM-MCXW71-LAB',
-        address: '00:04:9F:8A:2B:14',
-        rssi: -58,
-        isTargetMcu: true,
-        serviceUuid: '0xFFF0'
-      },
-      {
-        name: 'Wireless Headset',
-        address: 'F4:7D:EF:12:34:56',
-        rssi: -72,
-        isTargetMcu: false
-      }
-    ]
+    scannedDevices: []
   };
 
   // Apply Theme
@@ -508,19 +487,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.AndroidBridge && typeof window.AndroidBridge.startBleScan === 'function') {
       window.AndroidBridge.startBleScan();
-    } else {
-      setTimeout(() => {
-        if (!state.scannedDevices.some(d => d.address === '00:04:9F:8A:2B:10')) {
-          state.scannedDevices.unshift({
-            name: 'FRDM-MCXW71-VOX',
-            address: '00:04:9F:8A:2B:10',
-            rssi: -42,
-            isTargetMcu: true,
-            serviceUuid: '0xFFF0'
-          });
-        }
-        renderScannedDevices();
-      }, 700);
     }
   }
 
