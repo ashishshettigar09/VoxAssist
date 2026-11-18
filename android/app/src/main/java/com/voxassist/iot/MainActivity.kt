@@ -66,6 +66,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private val CHAR_STATUS_UUID   = UUID.fromString("0000FFF3-0000-1000-8000-00805F9B34FB") // Status
     private val CCCD_UUID          = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
+    // NXP Wireless UART (Freescale/NXP Custom Service) UUIDs
+    private val NXP_WU_SERVICE_UUID = UUID.fromString("01ff5550-ba5e-f4ee-5ca1-eb1e5e4b1ce0")
+    private val NXP_WU_CHAR_UUID    = UUID.fromString("01ff5551-ba5e-f4ee-5ca1-eb1e5e4b1ce0")
+
     // Scanned Bluetooth Devices Registry
     data class ScannedBleDevice(
         val name: String,
@@ -196,7 +200,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private var lastBroadcastTime = 0L
+
     private fun broadcastScannedDevices() {
+        val now = System.currentTimeMillis()
+        if (now - lastBroadcastTime < 250) {
+            return
+        }
+        lastBroadcastTime = now
         val jsonArray = JSONArray()
         for (dev in scannedDevices.values) {
             val obj = JSONObject()
@@ -668,7 +679,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             val serviceUuids = result.scanRecord?.serviceUuids?.joinToString(",") { it.uuid.toString() }
 
             val scanned = ScannedBleDevice(
-                name = if (name.isNotBlank()) name else "Unknown Device ($address)",
+                name = if (name.isNotBlank()) name else "Unnamed BLE ($address)",
                 address = address,
                 rssi = rssi,
                 isTargetMcu = isTarget,
@@ -677,12 +688,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
             scannedDevices[address] = scanned
             broadcastScannedDevices()
-
-            // If we find our designated target FRDM-MCXW71-VOX and not connected yet, auto connect!
-            if (name.equals("FRDM-MCXW71-VOX", ignoreCase = true) && bluetoothGatt == null) {
-                stopScan()
-                connectToDevice(device)
-            }
         }
 
         override fun onScanFailed(errorCode: Int) {
@@ -731,25 +736,43 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
 
             override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
-                if (status == BluetoothGatt.GATT_SUCCESS) {
-                    val service = gatt?.getService(SERVICE_UUID)
-                    val charTx = service?.getCharacteristic(CHAR_AUDIO_TX_UUID)
+                if (status == BluetoothGatt.GATT_SUCCESS && gatt != null) {
+                    val name = gatt.device.name ?: "BLE Peripheral"
 
-                    if (charTx != null) {
-                        // 1. Enable local notification
-                        gatt.setCharacteristicNotification(charTx, true)
+                    // Try Custom Assistive Service first
+                    var service = gatt.getService(SERVICE_UUID)
+                    var charNotify = service?.getCharacteristic(CHAR_AUDIO_TX_UUID)
 
-                        // 2. Write CCCD Descriptor
-                        val descriptor = charTx.getDescriptor(CCCD_UUID)
+                    // If not found, try standard NXP Wireless UART Service
+                    if (charNotify == null) {
+                        service = gatt.getService(NXP_WU_SERVICE_UUID)
+                        charNotify = service?.getCharacteristic(NXP_WU_CHAR_UUID)
+                    }
+
+                    // If still null, try finding any characteristic that supports Notify
+                    if (charNotify == null) {
+                        for (srv in gatt.services) {
+                            for (ch in srv.characteristics) {
+                                if ((ch.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
+                                    charNotify = ch
+                                    break
+                                }
+                            }
+                            if (charNotify != null) break
+                        }
+                    }
+
+                    if (charNotify != null) {
+                        gatt.setCharacteristicNotification(charNotify, true)
+                        val descriptor = charNotify.getDescriptor(CCCD_UUID)
                         if (descriptor != null) {
                             descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                             gatt.writeDescriptor(descriptor)
                         }
-
-                        val name = gatt.device.name ?: "FRDM-MCXW71"
-                        notifyBleStatus("Connected ($name)", true, name, -42)
-                        runOnUiThread { speak("Connected to $name. AUX microphone and speaker ready.") }
                     }
+
+                    notifyBleStatus("Connected ($name)", true, name, -42)
+                    runOnUiThread { speak("Connected to $name.") }
                 }
             }
 

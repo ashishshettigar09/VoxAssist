@@ -418,6 +418,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  let renderDebounceTimer = null;
+  function scheduleRenderScannedDevices() {
+    if (renderDebounceTimer) return;
+    renderDebounceTimer = setTimeout(() => {
+      renderDebounceTimer = null;
+      renderScannedDevices();
+    }, 200);
+  }
+
   function renderScannedDevices() {
     if (!devicesGrid) return;
 
@@ -435,15 +444,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (filtered.length === 0) {
       devicesGrid.innerHTML = `
-        <div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: var(--text-muted);">
-          No Bluetooth devices discovered matching filter. Tap "Scan Nearby Devices" above.
+        <div style="grid-column: 1 / -1; padding: 28px; text-align: center; color: var(--text-muted); background: var(--bg-surface); border-radius: var(--radius-md); border: 1px dashed var(--border-subtle);">
+          <div style="font-size: 1.5rem; margin-bottom: 8px;">📡</div>
+          <div style="font-weight: 600; color: var(--text-main); margin-bottom: 4px;">No devices detected yet</div>
+          <div style="font-size: 0.85rem;">Tap "Scan Nearby Devices" to scan for any Bluetooth peripheral, smartwatch, or microcontroller.</div>
         </div>
       `;
       return;
     }
 
     devicesGrid.innerHTML = filtered.map(dev => {
-      const isConnected = state.bleConnected && (dev.name === state.connectedDeviceName || dev.name.includes('MCXW71'));
+      const isConnected = state.bleConnected && (dev.name === state.connectedDeviceName || dev.address === state.connectedDeviceAddress);
       const rssi = dev.rssi || -60;
       const barsActive = rssi >= -50 ? 4 : rssi >= -65 ? 3 : rssi >= -80 ? 2 : 1;
 
@@ -452,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="device-info-col">
             <div class="device-name-row">
               <span class="device-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</span>
-              ${dev.isTargetMcu ? '<span class="target-badge-sm">TARGET MCU</span>' : ''}
+              ${dev.isTargetMcu ? '<span class="target-badge-sm">TARGET MCU</span>' : '<span class="generic-badge-sm">BLE DEVICE</span>'}
             </div>
             <div class="device-mac">${escapeHtml(dev.address)}</div>
             <div class="device-rssi-row">
@@ -477,7 +488,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
 
     devicesGrid.querySelectorAll('.device-connect-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const addr = btn.getAttribute('data-address');
         const name = btn.getAttribute('data-name');
         connectDevice(addr, name);
@@ -654,7 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (Array.isArray(list)) {
         state.scannedDevices = list;
-        renderScannedDevices();
+        scheduleRenderScannedDevices();
       }
     } catch (e) {
       console.error('Failed to parse scanned devices:', e);
