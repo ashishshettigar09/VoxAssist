@@ -57,7 +57,7 @@ const authorsList = [
 ];
 
 // IEEE conference rule: No symbols, footnotes, or math in Paper Title or Abstract
-const abstractText = "Seamless digital communication on modern smartphones depends almost exclusively upon flat capacitive glass touchscreens, creating an exclusionary barrier for millions of blind and visually impaired users who lack tactile spatial landmarks. While screen readers and commercial smart speakers such as Amazon Alexa provide conversational interfaces, their deployment in personal wearable messaging is constrained by costly far-field MEMS beamforming hardware, continuous standby power exceeding 1.5 W that exhausts portable batteries, public loudspeaker privacy leakage, cloud connectivity dependency, and closed proprietary application ecosystems. This paper presents VisioTinyML, an ultra-low-cost cyber-physical acoustic gateway integrating an NXP FRDM-MCXW71 dual-core wireless microcontroller with ubiquitous 3.5 mm CTIA wired earphones featuring an inline microphone and tactile push-to-talk trigger. Rather than costly digital microphone arrays, VisioTinyML couples a self-calibrated 16-bit ADC front-end with a fixed-point exponential moving-average baseline drift filter, hands-free voice activity detection, and a 16.25 KB lossless circular FIFO ring buffer over Bluetooth Low Energy 5.3 with MTU 512 negotiation. For edge intelligence, a compact two-dimensional Convolutional Neural Network trained on a 73-clip synthetic acoustic corpus detects multi-wake phrases (parity, hello parity, hey parity) using only 1,588 trainable parameters (6.35 KB weights in Flash), achieving 94.83 percent mean accuracy in stratified five-fold cross-validation and 100.0 percent wake-versus-noise discrimination, alongside an exported 6,672-byte TensorFlow Lite model scoring 94.52 percent accuracy. The companion Android service bridges BLE packets to a dual-metric Damerau-Levenshtein and phonetic contact matcher, automating zero-touch WhatsApp message dispatch via AccessibilityService DOM traversal and private in-ear reply readout via NotificationListenerService.";
+const abstractText = "Seamless digital communication on modern smartphones depends almost exclusively upon flat capacitive glass touchscreens, creating an exclusionary barrier for millions of blind and visually impaired users who lack tactile spatial landmarks. While screen readers and commercial smart speakers such as Amazon Alexa provide conversational interfaces, their deployment in personal wearable messaging is constrained by costly far-field MEMS beamforming hardware, continuous standby power exceeding 1.5 W that exhausts portable batteries, public loudspeaker privacy leakage, cloud connectivity dependency, and closed proprietary application ecosystems. This paper presents VisioTinyML, an ultra-low-cost cyber-physical acoustic gateway integrating an NXP FRDM-MCXW71 dual-core wireless microcontroller with ubiquitous 3.5 mm CTIA wired earphones featuring an inline microphone and earpiece drivers. Rather than incorporating an external digital microphone module or external power loudspeaker stage, the prototype handles all speech capture, wake triggers, chimes, incoming WhatsApp alerts, and conversational enquiries exclusively through a single 3.5 mm wired AUX earphone. The embedded front-end pairs a self-calibrated 16-bit ADC stage with a fixed-point exponential moving-average baseline drift filter, hands-free voice activity detection, passive RC earphone feedback filtering, and a 16.25 KB lossless circular FIFO ring buffer over Bluetooth Low Energy 5.3 with MTU 512 negotiation. For edge intelligence, a compact two-dimensional Convolutional Neural Network trained on a 73-clip synthetic acoustic corpus detects multi-wake phrases (parity, hello parity, hey parity) using only 1,588 trainable parameters (6.35 KB weights in Flash), achieving 94.83 percent mean accuracy in stratified five-fold cross-validation and 100.0 percent wake-versus-noise discrimination, alongside an exported 6,672-byte TensorFlow Lite model scoring 94.52 percent accuracy. The companion Android service bridges BLE packets to a dual-metric Damerau-Levenshtein and phonetic contact matcher, automating zero-touch WhatsApp message dispatch via AccessibilityService DOM traversal and private AUX-earphone enquiry readouts via NotificationListenerService.";
 
 const indexTerms = "TinyML, visual impairment, assistive technology, keyword spotting, NXP FRDM-MCXW71, Bluetooth Low Energy 5.3, wired earphone interface, lossless ring buffer, Android Accessibility Service, speech-to-WhatsApp automation.";
 
@@ -110,11 +110,11 @@ colChildren.push(subSubHeading(
 
 colChildren.push(subHeading("B", "The VisioTinyML Wired-Earphone Paradigm"));
 colChildren.push(p(
-  "To capture the hands-free responsiveness of an Alexa-like conversational assistant while keeping total component cost under $20 USD, VisioTinyML adopts a pragmatic cyber-physical architecture: replacing expensive far-field digital microphone arrays with a universal 3.5 mm CTIA female AUX jack interfacing ubiquitous $1.80 wired earphones. This deliberate engineering pivot delivers four decisive operational advantages:"
+  "To capture the hands-free responsiveness of an Alexa-like conversational assistant while keeping total prototype component cost under $18 USD, VisioTinyML adopts a pragmatic hardware architecture: eliminating both expensive far-field digital microphone modules and external loudspeaker amplifiers in the current prototype in favor of a single universal 3.5 mm CTIA female AUX jack interfacing ubiquitous $1.80 wired earphones. Routing both voice input and all enquiry responses exclusively through the AUX wired headset delivers four decisive advantages:"
 ));
 
 colChildren.push(p(
-  "First, placing the inline electret condenser microphone 2–3 cm from the speaker's mouth achieves high near-field signal-to-noise ratio (SNR) and passive rejection of room reverberation without beamforming DSP arrays. Second, private in-ear transducers play synthesized chimes and incoming message alerts strictly inside the user's ear canal. Third, pairing ultra-low-power ARM Cortex-M33 sleep management (WFI idle gating), dynamic Voice Activity Detection (VAD), and an inline Push-to-Talk (PTT) switch suppresses false wakeups and saves power. Fourth, because dedicated high-sensitivity digital MEMS microphone modules add significant prototype procurement cost, our architecture permits immediate real-world testing using everyday wired headsets while validating the embedded TinyML wake classifier via an in-memory PCM self-test vector (g_test_audio_sample) at microcontroller boot."
+  "First, placing the inline electret condenser microphone 2–3 cm from the speaker's mouth achieves high near-field signal-to-noise ratio (SNR) and passive rejection of room reverberation without DSP beamforming arrays. Second, routing all incoming notifications, dispatch chimes, and interactive voice enquiries ('Read out', 'What is the reply') solely into the wired AUX earphone drivers guarantees complete conversational privacy without emitting sound into crowded rooms or transit spaces. Third, eliminating an active loudspeaker amplifier removes multi-milliwatt speaker quiescent losses while pairing ultra-low-power ARM Cortex-M33 sleep management (WFI idle gating), dynamic Voice Activity Detection (VAD), and an inline Push-to-Talk (PTT) switch. Fourth, because dedicated MEMS microphones and Class-D loudspeaker hardware are deferred to future modular deployment, the current prototype allows immediate real-world bidirectional testing using everyday wired headsets while validating the embedded TinyML wake classifier via an in-memory PCM self-test vector (g_test_audio_sample) at microcontroller boot."
 ));
 
 colChildren.push(p(
@@ -188,8 +188,8 @@ tableElement(
 // Figure 1 Placeholder
 figPlaceholder(
   1,
-  "End-to-End VisioTinyML Cyber-Physical Architecture and Bidirectional Interaction Flow.",
-  "Block diagram detailing: (a) 3.5 mm TRRS wired headset microphone and speaker stage; (b) NXP FRDM-MCXW71 conditioning, VAD, 16.25 KB FIFO ring buffer, and on-chip TinyML KWS engine; (c) BLE 5.3 Wireless UART transport; and (d) Android companion services (MainActivity, Dual-Metric NLP matcher, WhatsAppAccessibilityService, and VoxNotificationListenerService).",
+  "End-to-End VisioTinyML Cyber-Physical Architecture and All-Earphone Interaction Flow.",
+  "Block diagram detailing: (a) single 3.5 mm TRRS wired AUX earphone (inline mic input + in-ear earpiece output for all enquiries); (b) NXP FRDM-MCXW71 conditioning, VAD, 16.25 KB FIFO ring buffer, and on-chip TinyML KWS engine; (c) BLE 5.3 Wireless UART transport; and (d) Android companion services (MainActivity, Dual-Metric NLP matcher, WhatsAppAccessibilityService, and VoxNotificationListenerService).",
   2700
 ).forEach(el => colChildren.push(el));
 
@@ -235,20 +235,20 @@ colChildren.push(p(
 // Figure 2 Placeholder
 figPlaceholder(
   2,
-  "Mixed-Signal 3.5 mm AUX Conditioning, Jack-Detect, and PAM8403 Earphone Circuit Schematic.",
-  "Complete hardware schematic detailing 3.5 mm CTIA female jack wiring, 10 µF AC-coupling capacitor, dual 10 kΩ 1.65 V biasing network on PTA16, PTA21 jack-insertion detect, PTB0 PTT switch, and PTB1 RC-filtered output into the PAM8403 Class-D amplifier with active-low SHDN_N gating on PTB2.",
+  "Mixed-Signal 3.5 mm AUX Earphone Conditioning, Jack-Detect, and Direct Earpiece Feedback Circuit Schematic.",
+  "Complete hardware schematic detailing 3.5 mm CTIA female jack wiring: Sleeve inline mic input via 10 µF AC-coupling capacitor + dual 10 kΩ 1.65 V divider to PTA16 (LPADC0), PTA21 jack-insertion detect, PTB0 PTT switch, and PTB1 passive RC-filtered feedback output directly driving the 32 Ω AUX earphone earpiece channel (no external amp or loudspeaker stage).",
   2700
 ).forEach(el => colChildren.push(el));
 
-colChildren.push(subHeading("D", "Acoustic Feedback Chimes and Anti-Pop Hardware Gating"));
+colChildren.push(subHeading("D", "Direct AUX Earphone Acoustic Chimes and Enquiry Routing"));
 colChildren.push(p(
-  "Earphone notification chimes and status prompts are synthesized digitally on PTB1 (SPK_AUDIO_PIN, Arduino D3) via Speaker_Tone() synchronized against core clock frequency via SDK_DelayAtLeastUs(), then smoothed by a first-order RC reconstruction low-pass filter (R_f = 1 kΩ, C_f = 10 nF):"
+  "To eliminate external power amplifier chips and loudspeaker hardware while handling all voice enquiries privately, acoustic confirmation tones are routed directly from pin PTB1 (SPK_AUDIO_PIN, Arduino D3) through a passive RC reconstruction and current-limiting network (R_f = 1 kΩ, C_f = 10 nF) into the wired 3.5 mm AUX earphone earpiece channel (~32 Ω transducer load). Synthesized digitally via Speaker_Tone() against SDK_DelayAtLeastUs(), the RC stage suppresses high-frequency edge harmonics at:"
 ));
 
 colChildren.push(eq("f_c,LPF = 1 / (2π · R_f · C_f) = 1 / [ 2π · 1000 Ω · 10 nF ] ≈ 15.92 kHz", 5));
 
 colChildren.push(p(
-  "Filtered signals feed a Class-D PAM8403 power stage driving the earphone earpiece or miniature 8 Ω speaker, with shutdown pin SHDN_N controlled by PTB2 (Arduino D5). Holding PTB2 LOW when idle suppresses background amplifier hiss and eliminates power-on pop transients. Speaker_PlayChime() renders three intuitive acoustic earcons: Chime 1 (880 Hz A5 -> 1320 Hz E6) for incoming WhatsApp alerts (opcode 0x10), Chime 2 (660 Hz -> 880 Hz) for recording/KWS wake activation, and Chime 3 (ascending C major arpeggio 523 -> 659 -> 784 -> 1046 Hz) for system boot and dispatch confirmation. Table II summarizes the prototype BOM."
+  "Because a 1 kΩ series resistance limits peak GPIO drive current below 3.3 mA while delivering comfortable sound pressure directly inside an occluded earphone cavity, the prototype requires zero external PAM8403 amplifier modules or 8 Ω loudspeakers. Firmware pin PTB2 remains initialized as a reserved active-low shutdown GPIO so an external Class-D stage can be populated optionally in future hardware revisions without low-level driver changes. Speaker_PlayChime() renders three acoustic earcons directly inside the headset: Chime 1 (880 Hz A5 -> 1320 Hz E6) for incoming WhatsApp alerts (opcode 0x10), Chime 2 (660 Hz -> 880 Hz) for recording/KWS wake activation, and Chime 3 (ascending C major arpeggio 523 -> 659 -> 784 -> 1046 Hz) for system boot and dispatch confirmation, while smartphone spoken TTS replies for enquiries execute exclusively over the connected AUX earphone path. Table II details the streamlined prototype BOM."
 ));
 
 // TABLE II: BOM
@@ -258,15 +258,13 @@ tableElement(
   ["Subsystem / Component", "Part Specification", "MCU Pinout", "Unit Cost ($)"],
   [
     ["Wireless MCU Board", "NXP FRDM-MCXW71 (Cortex-M33, BLE 5.3)", "USB-C MCU-Link", "12.50"],
-    ["Wired Headset + Mic", "Commercial 3.5 mm TRRS CTIA Earphones", "AUX Tip & Sleeve", "1.80"],
+    ["Wired AUX Earphone", "3.5 mm TRRS CTIA Headset (Mic + Earpiece)", "Tip/Ring1 & Sleeve", "1.80"],
     ["3.5 mm Female Jack", "4-Pole CTIA Socket w/ Insertion Switch", "PTA16, PTA21, PTB0", "0.35"],
     ["Conditioning Passives", "10 µF Cap + 10 kΩ Divider + 1 kΩ / 10 nF RC", "PTA16 / PTB1", "0.45"],
-    ["Class-D Audio Amp", "PAM8403 Miniature Stereo/Mono Module", "PTB1 (In+), PTB2 (Mute)", "0.65"],
-    ["Miniature Speaker", "8 Ω 1 W Auxiliary Feedback Load", "PAM8403 SPK+/SPK-", "0.55"],
     ["Battery & Charger", "3.7 V LiPo Cell + TP4056 Protection Module", "3.3V System Rail", "2.40"],
-    { cells: ["Total Prototype Cost", "Complete Accessible Cyber-Physical Node", "Sub-$20 Objective Met", "$18.70"], _highlight: true }
+    { cells: ["Total Prototype Cost", "Earphone-Only Cyber-Physical Gateway", "Zero External Mic/Spk", "$17.50"], _highlight: true }
   ],
-  "Representative single-unit prototype cost vs. $50–$250+ commercial smart speakers [10], [12].",
+  "Prototype cost eliminating both external digital MEMS microphone arrays ($50–$250+ [10], [12]) and external speaker amplifiers.",
   [27, 36, 22, 15]
 ).forEach(el => colChildren.push(el));
 
@@ -374,14 +372,14 @@ colChildren.push(p(
 colChildren.push(eq("https://api.whatsapp.com/send?phone=[E164]&text=[UTF8_Msg]", 8));
 
 colChildren.push(p(
-  "When WhatsApp opens, WhatsAppAccessibilityService.kt intercepts TYPE_WINDOW_STATE_CHANGED events [27], searches the AccessibilityNodeInfo tree for com.whatsapp:id/send or com.whatsapp.w4b:id/send (with recursive 'Send' text fallback), invokes performAction(ACTION_CLICK) with zero screen contact, and triggers GLOBAL_ACTION_BACK after 1,500 ms to return autonomously to VisioTinyML. In parallel, VoxNotificationListenerService.kt listens on incoming com.whatsapp notifications, suppresses background sync banners, caches the latest 20 messages, dispatches BLE opcode 0x10 to sound a private in-ear chime, and answers spoken queries ('Read out' / 'What is the reply') through TTS and BLE opcode 0x20."
+  "When WhatsApp opens, WhatsAppAccessibilityService.kt intercepts TYPE_WINDOW_STATE_CHANGED events [27], searches the AccessibilityNodeInfo tree for com.whatsapp:id/send or com.whatsapp.w4b:id/send (with recursive 'Send' text fallback), invokes performAction(ACTION_CLICK) with zero screen contact, and triggers GLOBAL_ACTION_BACK after 1,500 ms to return autonomously to VisioTinyML. In parallel, VoxNotificationListenerService.kt monitors incoming com.whatsapp notifications, suppresses background sync banners, caches the latest 20 messages, and dispatches BLE opcode 0x10 so the AUX wired earphone plays a private notification chime. All user enquiries—spanning message dispatch confirmations, notification prompts, and interactive spoken requests ('Read out' or 'What is the reply')—are spoken strictly into the connected 3.5 mm AUX earphone (backed by BLE opcode 0x20 earcon sync) without broadcasting audio through external loudspeakers."
 ));
 
 // Figure 5 Placeholder
 figPlaceholder(
   5,
   "Dual-Metric Phonetic Contact Matching and WhatsApp Accessibility DOM Auto-Send Flowchart.",
-  "Sequence workflow mapping Speech Transcript -> Wake Phrase Stripping -> Orthographic/Phonetic Matching Matrix -> WhatsApp Intent Launch -> AccessibilityNodeInfo View ID Search (com.whatsapp:id/send) -> Synthetic ACTION_CLICK -> NotificationListener In-Ear Alert Loop.",
+  "Sequence workflow mapping AUX Earphone Speech -> Wake Phrase Stripping -> Orthographic/Phonetic Matching Matrix -> WhatsApp Intent Launch -> AccessibilityNodeInfo View ID Search (com.whatsapp:id/send) -> Synthetic ACTION_CLICK -> NotificationListener AUX-Earphone Enquiry Loop.",
   2600
 ).forEach(el => colChildren.push(el));
 
@@ -492,7 +490,7 @@ colChildren.push(p(
 
 colChildren.push(subHeading("B", "Future Engineering Roadmap"));
 colChildren.push(p(
-  "Ongoing development prioritizes four enhancements: (1) migrating inference loops from float32 to INT8 fixed-point CMSIS-NN kernels (arm_convolve_s8) leveraging Cortex-M33 DSP SIMD extensions [16], which shrinks activation SRAM below 8 KB and accelerates execution; (2) interfacing open-ear bone-conduction headset transducers [11] so blind pedestrians hear approaching traffic unimpeded; (3) upgrading KWS_ExtractSpectrogram() with ARM CMSIS-DSP 512-point real FFT (arm_rfft_fast_f32) and training multilingual keywords (Hindi, Kannada, Tamil); and (4) harnessing the MCXW71's IEEE 802.15.4 radio [28] to bridge Matter/Thread domestic IoT devices via whispered headset commands."
+  "Ongoing development prioritizes five concrete hardware and algorithmic milestones: (1) Hardware I2S Microphone & External Speaker Module Integration—adding dedicated low-noise digital MEMS microphones (I2S PDM/TDM) alongside a switched Class-D audio amplifier (such as PAM8403 gated via firmware pin PTB2 or I2S MAX98357A) driving a compact 8 Ω speaker for optional home tabletop use when the user prefers unattached far-field listening over wired earphones; (2) Open-Ear Bone-Conduction Transducers [11] so visually impaired pedestrians hear street traffic unimpeded during mobile enquiries; (3) migrating KWS inference loops from float32 to INT8 fixed-point CMSIS-NN kernels (arm_convolve_s8) leveraging Cortex-M33 DSP SIMD extensions [16], cutting activation SRAM below 8 KB; (4) upgrading KWS_ExtractSpectrogram() with ARM CMSIS-DSP 512-point real FFT (arm_rfft_fast_f32) and expanding training to multilingual wake keywords (Hindi, Kannada, Tamil); and (5) exposing the MCXW71's IEEE 802.15.4 radio [28] to bridge Matter/Thread domestic smart appliances via headset commands."
 ));
 
 // =========================================================================
@@ -501,7 +499,7 @@ colChildren.push(p(
 colChildren.push(secHeading("VIII", "Conclusion"));
 
 colChildren.push(p(
-  "VisioTinyML demonstrates an ultra-low-cost, privacy-preserving cyber-physical voice gateway that empowers visually impaired individuals to conduct hands-free WhatsApp communication independently. By intentionally substituting expensive far-field beamforming arrays and mains-tethered smart speakers with a sub-$19 NXP FRDM-MCXW71 node interfaced to ubiquitous $1.80 wired earphones, the platform restores mobile autonomy while guaranteeing conversational privacy. Verified ELF link diagnostics and empirical cross-validation establish a lightweight 20.40% Flash and 67.12% SRAM footprint containing a 16.25 KB lossless audio ring buffer and a 1,588-parameter 2D-CNN wake classifier achieving 94.83% five-fold CV accuracy with zero background noise false positives. Unified with automated Android Accessibility DOM dispatch and private in-ear reply readouts, VisioTinyML charts a credible, reproducible path toward affordable edge intelligence for accessible computing."
+  "VisioTinyML demonstrates an ultra-low-cost, privacy-preserving cyber-physical voice gateway that empowers visually impaired individuals to conduct hands-free WhatsApp communication independently. By intentionally omitting expensive far-field microphone arrays and external speaker hardware in the current prototype—routing both voice commands and all conversational enquiries exclusively through a ubiquitous $1.80 wired 3.5 mm AUX earphone attached to an NXP FRDM-MCXW71 node ($17.50 total BOM)—the platform guarantees absolute personal privacy while minimizing hardware cost and quiescent power. Verified ELF link diagnostics and empirical cross-validation establish a lightweight 20.40% Flash and 67.12% SRAM footprint containing a 16.25 KB lossless audio ring buffer and a 1,588-parameter 2D-CNN wake classifier achieving 94.83% five-fold CV accuracy with zero background noise false positives. Unified with automated Android Accessibility DOM dispatch and AUX-earphone enquiry readouts, VisioTinyML provides a clean foundation ready for future MEMS microphone and external speaker expansion."
 ));
 
 // =========================================================================
