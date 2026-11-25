@@ -179,20 +179,33 @@ A GitHub Actions workflow is active at [`.github/workflows/build-apk.yml`](.gith
 
 ```
 Iotproject/
-├── PROJECT_MASTER_GUIDE.md # Comprehensive Engineering & Runbook Guide
-├── README.md               # Master GitHub Documentation
-├── index.html              # Multi-Tab White Theme Companion App (Settings Hub, Replies, Pins)
-├── style.css               # Crisp High-Contrast Accessible White Theme Styles
-├── app.js                  # Frontend Controller, Bluetooth Hub & NLP Engine
+├── PROJECT_MASTER_GUIDE.md  # Comprehensive Engineering & Runbook Guide
+├── README.md                # Master GitHub Documentation
+├── index.html               # Multi-Tab White Theme Companion App (Settings Hub, Replies, Pins)
+├── style.css                # Crisp High-Contrast Accessible White Theme Styles
+├── app.js                   # Frontend Controller, Bluetooth Hub & Multi-Wake-Phrase NLP Engine
 ├── .github/workflows/
-│   └── build-apk.yml       # Cloud APK Automated Build Workflow
-├── firmware/
-│   └── main.c              # NXP FRDM-MCXW71 Production C Firmware (ADC, PWM, BLE 5.3)
-└── android/
-    ├── AndroidManifest.xml # Permissions, Accessibility & Notification Listener
+│   └── build-apk.yml        # Cloud APK Automated Build Workflow
+├── firmware/                # NXP FRDM-MCXW71 Embedded Firmware (MCUXpresso SDK)
+│   ├── README.md            # Dedicated Firmware Architecture & Build Guide
+│   ├── main.c               # Main Loop, Hardware Init, Self-Calibrating VAD & TinyML Self-Test
+│   ├── wireless_uart.c      # BLE 5.3 GATT/GAP Stack & 16 KB Lossless Audio Ring Buffer
+│   ├── wireless_uart.h      # Public BLE & Audio Queue API Prototypes
+│   ├── parity_kws_model.h   # On-Device Neural Network Inference Engine (Stand-alone C)
+│   ├── test_audio_vector.h  # 16,000-sample PCM Test Audio Vector of "Parity"
+│   ├── app_config.c         # SDK Memory Pools, Timers & Power Management Config
+│   └── gatt_db.h            # Bluetooth GATT Characteristic & Service Handles
+├── kws/                     # TinyML Keyword Spotting Training Pipeline
+│   ├── README.md            # ML Pipeline Guide & Model Architecture
+│   ├── generate_dataset.ps1 # 16 kHz 16-bit Synthetic Audio Dataset Generator
+│   ├── train_kws.py         # Spectrogram Extraction, CNN Trainer & C Header Exporter
+│   ├── parity_kws_model.tflite # 6.6 KB Quantized TensorFlow Lite Flatbuffer Model
+│   └── dataset/             # 73 Normalized 16 kHz 1-sec Audio Clips (parity, hello_parity, hey_parity, noise)
+└── android/                 # Production Android Companion App
+    ├── AndroidManifest.xml  # Permissions, Accessibility & Notification Listener
     └── app/src/main/java/com/voxassist/iot/
-        ├── MainActivity.kt                  # Bluetooth Hub, Audio Streaming & NLP Engine
-        ├── VoxNotificationListenerService.kt# Real-time WhatsApp Notification Listener
+        ├── MainActivity.kt                  # Bluetooth Hub, Audio Streaming & Wake Phrase NLP Engine
+        ├── VoxNotificationListenerService.kt# Real-time WhatsApp Notification Listener & Chime Alert
         └── WhatsAppAccessibilityService.kt  # Hands-Free WhatsApp Auto-Clicker
 ```
 

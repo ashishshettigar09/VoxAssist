@@ -1095,21 +1095,32 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val clean = voiceText.trim()
         Log.d(TAG, "Processing voice command: $clean")
 
+        // Wake phrase detection: accepts "hello parity", "hey parity", "hi parity", or "parity"
+        val codewordRegex = Regex("\\b((hello|hey|hi)\\s+)?(parity|parody|perry|pairity)\\b", RegexOption.IGNORE_CASE)
+        val hasCodeword = codewordRegex.containsMatchIn(clean)
+
+        // Strip wake phrase to extract command payload
+        val effectiveCommand = if (hasCodeword) {
+            clean.replace(codewordRegex, "").trim().replace(Regex("^[,\\s-]+"), "")
+        } else {
+            clean
+        }
+
         // Check if user is asking to read out reply
-        if (isReplyReadoutQuery(clean)) {
+        if (isReplyReadoutQuery(effectiveCommand)) {
             handleVoiceQueryReadout()
             return
         }
 
         runOnUiThread {
             webView?.evaluateJavascript(
-                "if (window.handleNativeVoiceCommand) { window.handleNativeVoiceCommand('${clean.replace("'", "\\'")}'); }",
+                "if (window.handleNativeVoiceCommand) { window.handleNativeVoiceCommand('${effectiveCommand.replace("'", "\\'")}'); }",
                 null
             )
         }
 
         val contacts = getAllContactsList()
-        val match = resolveVoiceCommandToClosestMatch(clean, contacts)
+        val match = resolveVoiceCommandToClosestMatch(effectiveCommand, contacts)
 
         if (match != null) {
             val matchedContact = match.contact

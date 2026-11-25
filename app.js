@@ -1204,8 +1204,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Process Voice Commands & NLP Dispatcher
   // =========================================================================
   function processVoiceCommand(commandText) {
-    const cleanText = String(commandText || '').trim();
+    let cleanText = String(commandText || '').trim();
     if (!cleanText) return;
+
+    // Wake phrase detection: accepts "hello parity", "hey parity", "hi parity", or "parity"
+    const codewordRegex = /\b((hello|hey|hi)\s+)?(parity|parody|perry|pairity)\b/i;
+    const hasCodeword = codewordRegex.test(cleanText);
+    if (hasCodeword) {
+      cleanText = cleanText.replace(codewordRegex, '').trim().replace(/^[, \-]+/, '');
+      logBlePacket(`[WAKE PHRASE] Valid wake phrase detected ("Hello/Hey/Parity")! Executing: "${cleanText}"`, 'success');
+    }
 
     const lower = cleanText.toLowerCase();
 

@@ -6,10 +6,16 @@ app/build/
 .idea/
 local.properties
 .cxx/
+*.apk
+
+# IDE & Editor artifacts
+.codex/
+.vscode/
 
 # OS Files
 .DS_Store
 Thumbs.db
 
-# Log files
+# Log & Temp files
 *.log
+~$*.docx
