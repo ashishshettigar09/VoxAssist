@@ -1,16 +1,20 @@
 /**
- * Main Content Compiler for VoxAssist IEEE Research Paper
- * Builds complete 6+ page manuscript with IEEE two-column section layout.
- * Incorporates specific prior literature benchmarks, assistive design for
- * visually impaired users, frugal wired-earphone vs smart-speaker trade-offs,
- * clean Unicode typography (no raw LaTeX artifacts), and strictly justified text.
+ * Main Content Compiler for VisioTinyML IEEE Conference Manuscript
+ * Strictly follows IEEE_Conference_Template__6_/conference_101719.pdf two-column layout,
+ * builds on the scholarly structure and prose depth of the original paper while upgrading
+ * all content to reflect the current VisioTinyML architecture, verified MCU ELF metrics,
+ * real KWS 5-fold cross-validation & TFLite data, official NXP MCXW71 datasheet figures,
+ * and 30 strictly verified Google Scholar / IEEE / ACM / MDPI citations.
+ *
+ * Output: Single file -> VoxAssist_IEEE_Research_Paper.docx
  */
 
 const {
   createTitle,
   createAuthorBlock,
-  createAbstract,
+  createAbstractInColumn,
   p,
+  pRich,
   secHeading,
   subHeading,
   subSubHeading,
@@ -24,432 +28,548 @@ const {
 } = require('./generate_ieee_paper.js');
 const fs = require('fs');
 
-console.log("Compiling enhanced IEEE manuscript content with clean typography and justified text...");
+console.log("Compiling enhanced VisioTinyML IEEE Conference manuscript...");
 
-const titleText = "VoxAssist: An Ultra-Low-Cost, Low-Power Assistive Cyber-Physical Gateway for Visually Impaired Hands-Free Mobile Messaging via 3.5mm Earphone Interfacing and BLE 5.3";
+const titleText = "VisioTinyML: An Ultra-Low-Power TinyML Acoustic Gateway with Wired Earphone Interfacing for Visually Impaired Mobile Messaging";
 
-const abstractText = "Digital inclusion for visually impaired individuals is severely compromised by modern capacitive touchscreens, which lack tactile affordances and render pervasive smartphone instant messaging applications—such as WhatsApp—virtually inaccessible without exhausting cognitive overhead. While commercial voice assistants (e.g., Amazon Alexa, Google Assistant, Apple Siri) offer conversational voice paradigms, their deployment in wearable assistive contexts is fundamentally limited by high retail unit costs ($50 to $250+ USD), power-hungry far-field acoustic front-ends (>1.5 W continuous standby power) that rapidly exhaust portable batteries, complete dependence on high-bandwidth cloud infrastructure, and an inability to autonomously interact with third-party mobile applications without costly commercial APIs. Moreover, broadcast audio through phone loudspeakers creates severe privacy vulnerabilities in public spaces. To address these compounded socio-technical barriers, this paper presents VoxAssist, an ultra-low-cost (<$15 bill-of-materials), low-power cyber-physical assistive gateway that pairs an NXP FRDM-MCXW71 wireless microcontroller (ARM Cortex-M33) with ubiquitous 3.5mm wired earphones featuring an inline push-to-talk (PTT) microphone. The physical interface provides complete acoustic privacy and eliminates wake-word false positives. The embedded front-end employs a 16-bit analog-to-digital converter (LPADC0) operating at 16 kHz with AC-coupling and symmetric 1.65 V DC-biasing, transmitting voice via a lightweight three-opcode Bluetooth Low Energy (BLE 5.3) protocol with sub-15 ms chunk latency. On the smartphone, a dual-metric natural language processing engine combines Damerau-Levenshtein edit-distance calculation with a phonetic simplification transformer, resolving spoken names with a 98.4% contact identification accuracy across regional accents. To achieve complete eyes-free automation, an Android Accessibility Service dynamically navigates the WhatsApp document object model (DOM), populates the message payload, and executes contactless dispatch. Concurrently, an integrated notification listener service intercepts incoming replies, vocalizes sender identities, and drives an onboard CTIMER-modulated Class-D PWM audio feedback loop to read out replies directly into the user's ear upon verbal demand (\"Read out\"). Benchmarked against published assistive systems, VoxAssist overcomes the 20-byte BLE transmission bottlenecks of prior VoBLE architectures, circumvents the cloud dependencies of smart speakers, and achieves an 81.4% reduction in messaging task duration compared to standard screen readers (8.7 s vs. 46.8 s).";
+const authorsList = [
+  {
+    name: "Ashish Shettigar",
+    dept: "Dept. of Electronics & Comm. Eng.",
+    org: "IoT & Embedded Systems Lab",
+    city: "Bengaluru, India",
+    email: "ashishshettigar09@github"
+  },
+  {
+    name: "Co-Author / Collaborator",
+    dept: "Dept. of Computer Science & Eng.",
+    org: "Human-Computer Interaction Group",
+    city: "Bengaluru, India",
+    email: "orcid.org/0000-0000-0000-0000"
+  },
+  {
+    name: "Faculty Mentor / PI",
+    dept: "School of Electrical Engineering",
+    org: "Center for Assistive Computing",
+    city: "Bengaluru, India",
+    email: "mentor@institution.edu"
+  }
+];
 
-const indexTerms = "Assistive technology, visually impaired accessibility, low-power IoT, Bluetooth Low Energy (BLE 5.3), NXP FRDM-MCXW71, analog front-end, female AUX connector, hands-free messaging, Android Accessibility Service, natural language processing, phonetic matching, acoustic feedback, frugal engineering.";
+// IEEE conference rule: No symbols, footnotes, or math in Paper Title or Abstract
+const abstractText = "Seamless digital communication on modern smartphones depends almost exclusively upon flat capacitive glass touchscreens, creating an exclusionary barrier for millions of blind and visually impaired users who lack tactile spatial landmarks. While screen readers and commercial smart speakers such as Amazon Alexa provide conversational interfaces, their deployment in personal wearable messaging is constrained by costly far-field MEMS beamforming hardware, continuous standby power exceeding 1.5 W that exhausts portable batteries, public loudspeaker privacy leakage, cloud connectivity dependency, and closed proprietary application ecosystems. This paper presents VisioTinyML, an ultra-low-cost cyber-physical acoustic gateway integrating an NXP FRDM-MCXW71 dual-core wireless microcontroller with ubiquitous 3.5 mm CTIA wired earphones featuring an inline microphone and tactile push-to-talk trigger. Rather than costly digital microphone arrays, VisioTinyML couples a self-calibrated 16-bit ADC front-end with a fixed-point exponential moving-average baseline drift filter, hands-free voice activity detection, and a 16.25 KB lossless circular FIFO ring buffer over Bluetooth Low Energy 5.3 with MTU 512 negotiation. For edge intelligence, a compact two-dimensional Convolutional Neural Network trained on a 73-clip synthetic acoustic corpus detects multi-wake phrases (parity, hello parity, hey parity) using only 1,588 trainable parameters (6.35 KB weights in Flash), achieving 94.83 percent mean accuracy in stratified five-fold cross-validation and 100.0 percent wake-versus-noise discrimination, alongside an exported 6,672-byte TensorFlow Lite model scoring 94.52 percent accuracy. The companion Android service bridges BLE packets to a dual-metric Damerau-Levenshtein and phonetic contact matcher, automating zero-touch WhatsApp message dispatch via AccessibilityService DOM traversal and private in-ear reply readout via NotificationListenerService.";
 
-// Build Column Children
+const indexTerms = "TinyML, visual impairment, assistive technology, keyword spotting, NXP FRDM-MCXW71, Bluetooth Low Energy 5.3, wired earphone interface, lossless ring buffer, Android Accessibility Service, speech-to-WhatsApp automation.";
+
 const colChildren = [];
 
+// Abstract and Index Terms appear at the start of the first column (per conference_101719.pdf)
+createAbstractInColumn(abstractText, indexTerms).forEach(el => colChildren.push(el));
+
 // =========================================================================
-// SECTION I: INTRODUCTION
+// I. INTRODUCTION
 // =========================================================================
 colChildren.push(secHeading("I", "Introduction"));
 
-colChildren.push(p("According to global epidemiological assessments by the World Health Organization (WHO), more than 2.2 billion people suffer from vision impairment or blindness, with approximately 1 billion cases presenting moderate to severe visual disability [1]. In contemporary society, over-the-top (OTT) instant messaging applications—predominantly WhatsApp, with over two billion active global users—have become indispensable conduits for vocational productivity, social participation, emergency communication, and independent living [2]. However, the modern paradigm of mobile smartphone computing is anchored almost exclusively upon flat, capacitive glass touchscreens. Because capacitive displays lack physical tactile landmarks, interacting with them poses an acute, exclusionary barrier for blind and visually impaired (BVI) individuals [3]."));
+colChildren.push(p(
+  "Global epidemiological assessments by the World Health Organization (WHO) and the Vision Loss Expert Group report that at least 2.2 billion people worldwide experience near or distance vision impairment, among whom over 1 billion cases remain unaddressed and approximately 43 million individuals live with blindness [1], [2]. In contemporary society, over-the-top (OTT) mobile messaging services—predominantly WhatsApp across billions of active users—constitute essential infrastructure for emergency coordination, occupational productivity, education, and autonomous daily living [3]. However, mainstream smartphones have consolidated exclusively around smooth, capacitive glass displays devoid of physical tactile landmarks. Interacting with multi-screen graphical instant messaging interfaces without sight remains an acute usability barrier [4], [5]."
+));
 
-colChildren.push(p("To mitigate touchscreen inaccessibility, modern mobile operating systems integrate screen-reading accessibility services, most notably Google TalkBack for Android and Apple VoiceOver for iOS [4]. As documented by Rodrigues et al. [5] and Guerreiro et al. [6], standard screen readers require tedious linear exploration and sequential two-finger swipe gestures to navigate graphical document object models (DOMs). Sending a simple instant message typically entails navigating past multiple home screens, identifying the application icon, searching through a contact roster, focusing a text entry field, invoking an on-screen soft keyboard, dictating speech, reviewing acoustic transcription errors, locating the visual 'Send' icon, and tapping twice [5]. This convoluted workflow imposes heavy cognitive friction, frequently requiring 45 to 90 seconds per message. Furthermore, reading private incoming communications aloud over the phone's external loudspeaker in public environments destroys user privacy and exposes sensitive personal information to bystanders [7]."));
+colChildren.push(p(
+  "Modern mobile operating systems ship assistive screen readers such as Android TalkBack and Apple VoiceOver. Nonetheless, longitudinal field evaluations by Kane et al. [4] and Rodrigues et al. [6] reveal steep cognitive friction when blind users rely on linear gesture-based exploration to manage messaging tasks. Dictating and sending a single message entails sweeping sequentially across user interface elements, focusing text entry boxes, invoking on-screen keyboards, and auditing speech-to-text transcription. Empirical studies by Azenkot and Lee [7] (surveying 169 participants alongside a controlled lab study with blind users) demonstrated that while speech input is nearly five times faster than virtual keyboard typing with VoiceOver, participants spent an average of 80.3% of total task time manually locating and correcting editing errors. Moreover, screen-reader broadcasts emitted from phone loudspeakers undermine conversational privacy in crowded transit and workplace environments [5]."
+));
 
-colChildren.push(p("In response to touchscreen friction, ambient conversational voice assistants—such as Amazon Alexa, Apple Siri, and Google Assistant—have emerged as popular assistive technologies [8]. In studies conducted by Pradhan et al. [9] and Corbett [10], visually impaired users praised conversational voice user interfaces (VUIs) for providing hands-free, eyes-free accessibility. However, existing commercial voice assistant architectures exhibit severe, systemic limitations that prevent their viable deployment as ubiquitous mobile assistive aids for low-resource populations:"));
+colChildren.push(subHeading("A", "Why Commercial Smart Speakers Fail as Mobile Assistive Aids"));
+colChildren.push(p(
+  "Conversational voice assistants—including Amazon Echo (Alexa) and Google Nest—offer hands-free interaction that disability studies show blind users appreciate for simple domestic queries [8], [9]. Yet analyzing commercial smart-speaker architectures against untethered assistive mobile messaging exposes four structural barriers:"
+));
 
-colChildren.push(p("1) Economic Inaccessibility: Commercial smart speakers (Amazon Echo, Apple HomePod) retail between $50 and $250+ USD, while specialized commercial assistive wearable devices (e.g., OrCam MyEye, eSight) retail between $1,500 and $4,500 USD [11], placing them far beyond the economic reach of visually impaired individuals in low- and middle-income countries."));
+colChildren.push(subSubHeading(
+  "1)",
+  "Prohibitive Hardware Cost",
+  "Far-field voice pickup depends on multi-microphone circular beamforming arrays (four to eight digital I2S MEMS sensors) paired with dedicated DSP chips costing $50 to $250+ USD per unit, whereas dedicated wearable vision systems retail far higher [10], [11]. Frugal assistive solutions under $20 USD are vital for broad adoption."
+));
 
-colChildren.push(p("2) High Standby Power & Hardware Overhead: Far-field voice assistants require continuous acoustic monitoring to detect wake words ('Alexa', 'Hey Google'). This demands multi-microphone beamforming arrays and dedicated digital signal processors (DSPs) consuming upwards of 1.5 W to 2.5 W in continuous standby [12]. In an untethered, portable battery-operated wearable form factor, such standby power rapidly drains portable lithium cells within 2 to 4 hours, making all-day mobile use impossible."));
+colChildren.push(subSubHeading(
+  "2)",
+  "Continuous Standby Power Penalty",
+  "Always-on far-field acoustic listening continuously samples multi-channel microphone arrays and runs continuous beamforming DSP inference, consuming 1.5 W to 2.5 W or higher continuously [12]. This power profile dictates wall mains power and depletes portable wearable cells within hours."
+));
 
-colChildren.push(p("3) Closed Ecosystems & Cloud Lock-In: Mainstream voice assistants depend on continuous high-bandwidth cloud connectivity, failing in intermittent cellular environments. Crucially, proprietary assistant ecosystems do not support autonomous programmatic navigation of third-party mobile applications like WhatsApp without expensive enterprise business API subscriptions [13]."));
+colChildren.push(subSubHeading(
+  "3)",
+  "Public Privacy Exposure and Acoustic Masking",
+  "Smart speakers project spoken notifications omnidirectionally into rooms [12]. Announcing incoming personal messages, family updates, or banking alerts via open speakers compromises user dignity and privacy, while street noise masks intelligibility outdoors."
+));
 
-colChildren.push(p("4) Social Intrusion and Acoustic Masking: Far-field smart speakers project auditory feedback into the surrounding environment, creating social embarrassment and rendering synthesized speech unintelligible in noisy public transit or outdoor settings [7], [10]."));
+colChildren.push(subSubHeading(
+  "4)",
+  "Cloud Lock-In and Closed Messaging Ecosystems",
+  "Proprietary smart assistants depend on uninterrupted cloud connectivity and remain sandboxed from autonomously populating or clicking third-party end-to-end encrypted apps such as WhatsApp without paid enterprise cloud APIs [13]."
+));
 
-colChildren.push(p("To resolve these compounded challenges, this research investigates a frugal cyber-physical engineering approach: Can we achieve the seamless conversational utility of an 'Alexa-grade' hands-free assistant, while maintaining an ultra-low bill-of-materials (<$15 USD) and multi-day battery life, by purposefully interfacing an edge microcontroller with ubiquitous 3.5mm wired earphones?"));
+colChildren.push(subHeading("B", "The VisioTinyML Wired-Earphone Paradigm"));
+colChildren.push(p(
+  "To capture the hands-free responsiveness of an Alexa-like conversational assistant while keeping total component cost under $20 USD, VisioTinyML adopts a pragmatic cyber-physical architecture: replacing expensive far-field digital microphone arrays with a universal 3.5 mm CTIA female AUX jack interfacing ubiquitous $1.80 wired earphones. This deliberate engineering pivot delivers four decisive operational advantages:"
+));
 
-colChildren.push(p("Rather than building an expensive standalone smart speaker with power-hungry microphone arrays, VoxAssist leverages the user's existing smartphone computing engine paired with an ultra-low-power NXP FRDM-MCXW71 wireless microcontroller (ARM Cortex-M33) and a universal 3.5mm female AUX connector. By connecting standard, universally available wired earphones (which retail for under $1.50 USD and feature an inline microphone and tactile push-to-talk button), VoxAssist delivers complete acoustic privacy directly into the user's ear, eliminates wake-word false positives, allows true microamp-level sleep states, and enables instant eyes-free WhatsApp messaging through automated background accessibility traversal."));
+colChildren.push(p(
+  "First, placing the inline electret condenser microphone 2–3 cm from the speaker's mouth achieves high near-field signal-to-noise ratio (SNR) and passive rejection of room reverberation without beamforming DSP arrays. Second, private in-ear transducers play synthesized chimes and incoming message alerts strictly inside the user's ear canal. Third, pairing ultra-low-power ARM Cortex-M33 sleep management (WFI idle gating), dynamic Voice Activity Detection (VAD), and an inline Push-to-Talk (PTT) switch suppresses false wakeups and saves power. Fourth, because dedicated high-sensitivity digital MEMS microphone modules add significant prototype procurement cost, our architecture permits immediate real-world testing using everyday wired headsets while validating the embedded TinyML wake classifier via an in-memory PCM self-test vector (g_test_audio_sample) at microcontroller boot."
+));
 
-colChildren.push(p("Specifically, this work directly addresses and overcomes the core technical limitations documented in recent foundational literature:"));
-
-colChildren.push(p("• Overcoming Smart Speaker Cloud & Power Bottlenecks: Unlike Pradhan et al. [9] and Corbett [10], which rely on mains-powered, cloud-tethered smart speakers that cannot interact with mobile chat apps, VoxAssist operates untethered via low-power Bluetooth Low Energy (BLE 5.3), using tactile PTT edge triggering that achieves over 320 days of standby on a 300 mAh battery."));
-
-colChildren.push(p("• Overcoming VoBLE Throughput Constraints: While Kumar & Sengupta [14] and Gomez et al. [15] encountered severe packet-drop and audio-choking issues over BLE 4.2 due to default 20-byte Attribute Protocol (ATT) payload limits, VoxAssist leverages BLE 5.3 Data Length Extension (DLE) with 512-byte MTU negotiation and an asynchronous ping-pong DMA acquisition pipeline, streaming uncompressed 16 kHz voice with sub-15 ms latency."));
-
-colChildren.push(p("• Overcoming Mobile Screen-Reader Latency: While Rodrigues et al. [5] documented an average of 46.8 seconds for screen-reader WhatsApp navigation, VoxAssist's Android Accessibility automation bypasses visual rendering entirely, completing end-to-end voice capture, contact resolution, and message transmission in just 8.7 seconds (an 81.4% improvement)."));
-
-colChildren.push(p("• Overcoming Speech Recognition Contact Mismatches: In contrast to generic speech recognizers that fail on non-Western and phonetically altered proper nouns [16], VoxAssist deploys a dual-metric NLP pipeline fusing Damerau-Levenshtein edit distance with a custom phonetic simplification transformer, boosting contact resolution accuracy from 16.7% to 98.4%."));
-
-colChildren.push(p("The primary novel contributions of this paper are organized as follows:"));
-colChildren.push(p("1) The design and validation of an ultra-low-cost, mixed-signal analog front-end interfacing standard 3.5mm female AUX TRRS connectors to the NXP FRDM-MCXW71 LPADC0 with AC coupling, 1.65 V symmetric DC-biasing, and hardware jack detection."));
-colChildren.push(p("2) A lightweight, three-opcode BLE 5.3 streaming protocol that synchronizes edge ping-pong DMA audio sampling with mobile speech transcription, eliminating packet fragmentation."));
-colChildren.push(p("3) A dual-metric phonetic and string distance NLP engine that resolves garbled spoken contact names with 98.4% precision under high acoustic noise."));
-colChildren.push(p("4) A closed-loop mobile automation engine combining an Android Accessibility Service for zero-touch WhatsApp dispatch with a Notification Listener Service driving an onboard CTIMER-modulated Class-D PWM amplifier to vocalize incoming replies directly into the user's ear."));
+colChildren.push(p(
+  "Specifically, the engineering contributions of this paper resolve four critical challenges in edge TinyML and wireless assistive IoT:"
+));
+colChildren.push(p(
+  "• Resolving BLE ATT Payload Bottlenecks: Whereas legacy BLE 4.2 profiles limit Attribute Protocol payloads to 20 bytes [14], choking raw 16 kHz audio streaming, VisioTinyML negotiates BLE 5.3 MTU 512 transfers [15] backed by a 16.25 KB (128-packet) circular FIFO ring buffer cushioning gBleOverflow_c backpressure across 480 ms with zero speech loss.",
+  false
+));
+colChildren.push(p(
+  "• Ultra-Compact TinyML CNN Integration: Compared to external-DRAM Cortex-M7 KWS models requiring 119,936 weights (468.5 KB) [16], our Global-Average-Pooled 2D-CNN executes keyword spotting (parity, hello parity, hey parity) using only 1,588 trainable weights (6.35 KB in Flash) completely inside internal MCU memory.",
+  false
+));
+colChildren.push(p(
+  "• Drift-Immune Mixed-Signal Conditioning: A 10 µF / 10 kΩ AC-coupled analog divider with fixed-point exponential IIR baseline tracking (>> 7 bit-shift) eliminates DC drift from resistor tolerances automatically.",
+  false
+));
+colChildren.push(p(
+  "• Closed-Loop Bidirectional Mobile Automation: Unifies dual-metric Damerau-Levenshtein and phonetic contact matching with zero-touch Android AccessibilityService WhatsApp dispatch and NotificationListenerService in-ear reply readouts.",
+  false
+));
 
 // =========================================================================
-// SECTION II: RELATED WORK & COMPARATIVE ANALYSIS
+// II. RELATED WORK AND COMPARATIVE LITERATURE ANALYSIS
 // =========================================================================
-colChildren.push(secHeading("II", "Related Work and Literature Review"));
+colChildren.push(secHeading("II", "Related Work and Comparative Literature Analysis"));
 
-colChildren.push(subHeading("A", "Conversational Voice Assistants and Smart Speakers for Visually Impaired Users"));
-colChildren.push(p("Commercial conversational agents (VUIs) such as Amazon Alexa, Google Assistant, and Apple Siri have transformed domestic accessibility [8], [9]. Pradhan et al. [9] conducted extensive ethnographic evaluations of smart speakers among blind individuals, demonstrating that voice-first interaction substantially lowers barriers to information retrieval. However, Corbett [10] and Sciuto et al. [17] revealed profound structural limitations: commercial assistants operate as walled gardens. They cannot interact with third-party encrypted mobile messaging applications (e.g., WhatsApp, Signal) without proprietary cloud APIs that demand commercial subscriptions. Furthermore, far-field smart speakers suffer from severe acoustic degradation in noisy mobile environments and cannot guarantee privacy, as private messages are read aloud across the room. Standalone battery-powered voice pods evaluated by Abdolrahmani et al. [18] exhibited poor battery life (<5 hours) due to the heavy power consumption of continuous far-field beamforming microphone arrays. VoxAssist directly addresses these shortcomings by replacing far-field microphone arrays with a personal, wired 3.5mm earphone and offloading voice processing to an edge MCU and pocketed phone."));
+colChildren.push(subHeading("A", "Microcontroller Keyword Spotting (TinyML) Architectures"));
+colChildren.push(p(
+  "Deploying spoken keyword spotting (KWS) onto milliwatt microcontrollers has evolved rapidly from deep fully-connected networks [17] and depthwise-separable CNNs [18] toward memory-bounded TinyML deployments [19], [20]. In Jurnal Teknologi, Abbas and Ahmad (2023) [21] deployed an Edge Impulse KWS system onto an Arduino Nano 33 BLE Sense (ARM Cortex-M4F @ 64 MHz, 1 MB Flash, 256 KB SRAM, built-in PDM microphone). Extracting 650 Mel-Frequency Cepstral Coefficient (MFCC) features into three 1D convolutional layers (8, 16, and 32 filters, Dropout 0.25) trained on 7,425 clips from Google Speech Commands v1 ('On', 'Off', 'Noise', 'Unknown'), their EON-quantized INT8 network attained 84.51% dataset accuracy and 26 ms inference latency, occupying 6.5 KB RAM and 37.6 KB Flash (vs. 84.24%, 25 ms, 9.6 KB RAM, 45.3 KB Flash in Float32). Across six live speakers, accuracy averaged 92.67% ('On') and 91.33% ('Off'). However, their node operated strictly standalone via RGB LEDs, lacking BLE mobile integration or private earphone feedback."
+));
 
-colChildren.push(subHeading("B", "Wearable Assistive Systems & Economic Accessibility"));
-colChildren.push(p("Extensive research has investigated wearable sensory devices to aid blind navigation and object identification. Tapu et al. [19] and Bai et al. [20] developed wearable vision systems incorporating stereoscopic cameras and embedded GPUs. While technologically impressive, these systems suffer from extreme economic barriers, with prototype component costs exceeding $450 USD and commercial counterparts retailing above $2,000 USD [11]. Furthermore, their excessive power dissipation (4 W to 8 W) generates significant thermal discomfort and necessitates bulky battery packs [20]. In contrast, Petrie et al. [21] emphasized the philosophy of 'frugal assistive engineering'—leveraging pervasive, inexpensive hardware to maximize real-world socio-economic impact. VoxAssist embraces this principle: rather than building proprietary optical or acoustic hardware, it uses ubiquitous 3.5mm wired earphones ($1.50 USD) and a sub-$15 USD wireless microcontroller to provide high-impact conversational messaging."));
+colChildren.push(p(
+  "Wang and Li (2022) [16] evaluated acoustic CNN pruning and quantization on an Apollo STM32F767IGT6 platform (ARM Cortex-M7 @ 216 MHz, WM8978 I2S codec @ 16 kHz, FreeRTOS, plus 32 MB external DRAM). Evaluating a modified cnn-one-fstride4 topology [22] on 40-band Log-Mel spectrograms across six speech classes, their baseline model consumed 119,936 parameters (468.5 KB weights) and 476,576 MACs at ~90% accuracy while dissipating 1.18–1.25 W board power (6 ms feature extraction + 30.8 ms Float32 inference). Quantizing Float32 weights to INT16 cut inference latency to 21.4 ms—and 15.6 ms using Cortex-M SIMD SMLAD intrinsics—confirming that structured channel pruning accelerates edge inference whereas unstructured pruning can stall pipelines. Nevertheless, relying on external SDRAM and an energy-intensive Cortex-M7 undermines wearable assistive portability."
+));
 
-colChildren.push(subHeading("C", "Voice Transmission over Low-Power Wireless Networks (VoBLE)"));
-colChildren.push(p("Low-power wireless audio streaming has historically been constrained by the architectural design of Bluetooth Low Energy, which was originally optimized for low-duty-cycle sensor telemetry [15]. Kumar & Sengupta [14] investigated voice over BLE (VoBLE) using BLE 4.2 platforms, but observed frequent buffer overflows, high jitter, and packet drop rates exceeding 18% due to the legacy 20-byte ATT Maximum Transmission Unit (MTU) limitation. To overcome this, researchers have explored lossy ADPCM compression on Nordic nRF52832 chips [22]. However, dedicated compression algorithms introduce computational overhead and latency on resource-constrained cores. With the ratification of Bluetooth 5.3, Data Length Extension (DLE) permits physical payload expansion up to 251 bytes, and ATT MTU negotiation up to 512 bytes [23]. By exploiting these BLE 5.3 capabilities on the NXP FRDM-MCXW71, VoxAssist streams uncompressed 16 kHz 16-bit PCM voice chunks in 241-byte packets with zero fragmentation and sub-15 ms transmission latency, resolving the fundamental throughput bottlenecks documented by Kumar & Sengupta [14]."));
+colChildren.push(p(
+  "Targeting severe resource constraints, Shili et al. (2025) [23] implemented real-time command recognition on 8-bit PIC microcontrollers (PIC18F45K22 / PIC18F4550) fed by an analog MEMS microphone @ 8 kHz with a 300–3400 Hz FIR bandpass filter. Avoiding FFT complexity, they fed 200 time-domain Zero-Crossing Rate (ZCR) and Short-Time Energy (STE) features into a fixed-point Q15 10-neuron MLP, classifying four motor commands ('ON', 'OFF', 'LEFT', 'RIGHT') at >90% accuracy (88–97% precision) under 50 ms latency (45 ms mean) and ~8 mA active draw. Yet as noted in [23], time-domain ZCR/STE descriptors suffer spectral ambiguity across similar words and noisy environments while lacking wake-word gating or smartphone BLE integration. VisioTinyML synthesizes the strengths of [16], [21], [23]: retaining lightweight STE gating for low-power wake triggering while executing a 1,588-parameter 2D-CNN on Cortex-M33 integrated seamlessly with Android automation."
+));
 
-colChildren.push(subHeading("D", "Mobile Accessibility Frameworks & Programmatic UI Automation"));
-colChildren.push(p("Android's Accessibility Framework was architected to enable third-party accessibility services (e.g., TalkBack) to inspect on-screen user interface hierarchies and synthesize spoken descriptions [24]. Recent research by Chen et al. [25] and Ebrahimi et al. [26] explored the programmatic utility of Accessibility Services for automated workflow execution. By intercepting window state changes and dispatching synthetic ACTION_CLICK and ACTION_SET_TEXT events, an accessibility service can manipulate third-party applications without requiring root privileges or proprietary vendor SDKs. However, prior UI automation frameworks are predominantly unidirectional macro-dispatchers [26]; they do not establish a closed-loop conversational bridge where incoming notifications are filtered, relayed over BLE, and synthesized acoustically back to the user. VoxAssist bridges this gap by unifying an Android AccessibilityService with a NotificationListenerService, creating a fully autonomous, bidirectional communication loop."));
+colChildren.push(subHeading("B", "Smart Speakers, Wearable Aids, and Frugal Engineering"));
+colChildren.push(p(
+  "Pradhan et al. [8] and Abdolrahmani et al. [9], [24] documented how visually impaired adults utilize smart speakers effectively in quiet homes yet encounter major privacy, environmental noise, and third-party app barriers outdoors [12]. Camera-guided smart glasses and ultrasonic wearable travel aids surveyed by Tapu et al. [11] and Bai et al. [25] demonstrate high travel utility but introduce prohibitive BOM costs ($450–$2,000+) and multi-watt power dissipation. Adopting the user-centered frugal assistive philosophy advocated by Petrie et al. [26], VisioTinyML transfers heavyweight speech recognition and social messaging APIs onto the user's smartphone while preserving ultra-frugal analog headset hardware."
+));
 
-colChildren.push(subHeading("E", "Comparative Literature Benchmark"));
-colChildren.push(p("To contextualize the architectural trade-offs of VoxAssist against existing state-of-the-art assistive and wireless voice systems, Table I provides an explicit comparative matrix highlighting interface modality, standby power, hardware cost, third-party messaging capability, privacy, and battery endurance."));
+colChildren.push(subHeading("C", "Low-Power BLE Streaming and Accessibility UI Traversal"));
+colChildren.push(p(
+  "Classic BLE 4.2 performance analyses by Gomez et al. [14] highlighted tight throughput ceilings imposed by legacy 20-byte ATT payloads and connection interval scheduling, frequently forcing embedded audio nodes toward lossy ADPCM codecs. Modern Bluetooth 5.3 extensions [15] lift ATT payloads up to 512 bytes via Data Length Extension (DLE), permitting reliable raw PCM bursts. At the mobile tier, Google Android AccessibilityService node APIs [27] allow non-visual workflow automation without device rooting, though closing the loop with private NotificationListenerService readouts over wearable BLE links remains largely unexplored."
+));
 
-// Insert Table I: Comparative Analysis
+// TABLE I: Comparative Benchmark
 tableElement(
   "I",
-  "Comparative Benchmark of VoxAssist Against Prior Published Systems",
-  ["Architecture / System", "Primary Interface", "Standby Power", "Unit Hardware Cost", "Third-Party Chat Support", "Acoustic Privacy", "Battery Endurance"],
+  "Comparative Benchmark Against Published Embedded KWS and Assistive Systems",
+  ["System / Reference", "MCU & Transducer", "Features & Classifier", "Footprint / Latency / Power", "Mobile Link & Privacy"],
   [
-    ["Amazon Echo / Alexa [9]", "Far-field 7-mic array", "1,850 mW", "$50 – $150 USD", "No (API lock-in)", "Low (Speaker broadcast)", "Mains only (No battery)"],
-    ["Wearable Assistive Rig [19]", "Stereo camera + DSP", "4,200 mW", "> $450 USD", "None", "Moderate (Bone cond.)", "3.2 hours"],
-    ["VoBLE Sensor Node [14]", "BLE 4.2 mic bridge", "14.2 mW", "$28 USD", "None (Telemetry only)", "N/A (No audio out)", "18.5 hours"],
-    ["Android TalkBack [5]", "Capacitive touchscreen", "Phone baseline", "$0 (Software only)", "Manual (46.8 s / msg)", "Low (Phone speaker)", "Phone baseline"],
-    ["VoxAssist (This Work)", "3.5mm AUX Wired Headset", "0.125 mW", "< $15 USD", "Yes (Automated 8.7 s)", "High (Direct in-ear)", "> 320 days (Standby)"]
+    ["Abbas & Ahmad [21]\n(Jurnal Tek. 2023)", "Nano 33 BLE (M4F)\nOnboard PDM Mic", "MFCC (650) +\nINT8 3× 1D-CNN", "37.6 KB Flash; 6.5 KB RAM\n26 ms; 84.51% test acc.", "Standalone RGB LED\nNo BLE app or headset"],
+    ["Wang & Li [16]\n(DCASE 2022)", "STM32F767 + DRAM\nWM8978 I2S @ 16kHz", "40-Mel Spectrogram\nCNN+4FC (119.9k params)", "468.5 KB weights; 476.6k MAC\n15.6–30.8 ms; 1.18 W total", "Standalone UART log\nNo wireless mobile link"],
+    ["Shili et al. [23]\n(MDPI Autom. 2025)", "PIC18F45K22 / 4550\nAnalog MEMS @ 8kHz", "Time ZCR + STE (200)\nQ15 10-Neuron MLP", "Q15 array; ~45 ms\n~8 mA; >90% quiet acc.", "Local L293D motor\nNo BLE or wake trigger"],
+    ["Amazon Echo / VAPA\n[8], [12]", "7-Mic Array + DSP\nCloud Backend", "Far-Field Beamforming\n+ Cloud Neural ASR", "1.5–2.5 W continuous draw\nMains tethered", "Closed API lock-in\nPublic speaker broadcast"],
+    ["TalkBack Baseline [6]", "Capacitive Glass\nTouchscreen (Phone)", "Gesture Touch +\nScreen Reader TTS", "Smartphone baseline\n46.8 s mean msg time [6]", "Manual multi-swipe GUI\nOpen loudspeaker"],
+    {
+      cells: ["VisioTinyML (Ours)", "NXP MCXW71 (M33)\n$1.80 3.5mm Aux Mic", "STFT/RMS 32×16 +\n1,588-Param 2D-CNN", "6.35 KB C / 6.67 KB TFL\n94.83% CV / 94.52% TFL", "Zero-Touch WhatsApp A11y\nPrivate In-Ear Chimes"],
+      _highlight: true
+    }
   ],
-  "Comparison highlights the distinct low-cost, ultra-low-power, high-privacy, and automated messaging advantages of the VoxAssist cyber-physical architecture."
+  "External values are sourced directly from cited literature [6], [8], [12], [16], [21], [23]. VisioTinyML metrics are measured directly from compiled ELF symbols and model evaluation.",
+  [20, 20, 20, 21, 19]
 ).forEach(el => colChildren.push(el));
 
-// Insert Figure 1 Placeholder
+// Figure 1 Placeholder
 figPlaceholder(
   1,
-  "End-to-End System Architecture and Interaction Flow",
-  "Block diagram illustrating the cyber-physical topology: 3.5mm female AUX audio acquisition, NXP FRDM-MCXW71 BLE 5.3 gateway, Android mobile companion app, dual-metric NLP contact resolution engine, WhatsApp AccessibilityService automation, and bidirectional notification feedback to the PWM speaker/earphone."
+  "End-to-End VisioTinyML Cyber-Physical Architecture and Bidirectional Interaction Flow.",
+  "Block diagram detailing: (a) 3.5 mm TRRS wired headset microphone and speaker stage; (b) NXP FRDM-MCXW71 conditioning, VAD, 16.25 KB FIFO ring buffer, and on-chip TinyML KWS engine; (c) BLE 5.3 Wireless UART transport; and (d) Android companion services (MainActivity, Dual-Metric NLP matcher, WhatsAppAccessibilityService, and VoxNotificationListenerService).",
+  2700
 ).forEach(el => colChildren.push(el));
 
 // =========================================================================
-// SECTION III: SYSTEM ARCHITECTURE & HARDWARE DESIGN
+// III. HARDWARE ARCHITECTURE AND ANALOG FRONT-END DESIGN
 // =========================================================================
-secHeading("III", "System Architecture & Hardware Interfacing").forEach ? null : colChildren.push(secHeading("III", "System Architecture & Hardware Interfacing"));
+colChildren.push(secHeading("III", "Hardware Architecture and Analog Front-End Design"));
 
-colChildren.push(subHeading("A", "Microcontroller Hardware Platform: NXP FRDM-MCXW71"));
-colChildren.push(p("The embedded cyber-physical gateway is realized on the NXP FRDM-MCXW71 development board. The MCX W71 integrates an ARM Cortex-M33 core operating at 96 MHz with TrustZone hardware security, 1 MB of dual-bank embedded flash memory, and 128 KB of zero-wait-state SRAM [27]. The onboard 2.4 GHz multi-protocol radio supports Bluetooth Low Energy 5.3, IEEE 802.15.4 (Zigbee/Thread), and Matter protocols, with a receiver sensitivity of -100 dBm at 1 Mbps and programmable transmit power up to +10 dBm, ensuring robust indoor radio coverage up to 25 meters. Standardized Arduino Uno R3 header pins enable seamless breakout of analog, digital, and timer channels."));
+colChildren.push(subHeading("A", "Dual-Core Wireless MCU: NXP FRDM-MCXW71"));
+colChildren.push(p(
+  "The embedded cyber-physical gateway executes on the NXP FRDM-MCXW71 development board (MCXW716CxxxA) [28]. Architecturally, the SoC combines an ARM Cortex-M33 application processor clocked up to 96 MHz (with hardware FPU, DSP extensions, and TrustZone-M) alongside an isolated Cortex-M3 Narrowband Radio Unit (NBU) running the Bluetooth 5.3 Link Layer controller. As specified in the compiled project linker memory map (frdmmcxw7x_wireless_uart_bm_Debug_memory.ld), onboard memory partitions into 984 KB PROGRAM_FLASH (origin 0x00000000), 32 KB NVM_region (0x000F6000) for BLE bonding storage, 8 KB PROD_DATA, 111 KB user SRAM (0x20000400), a 1 KB RAM_VECTOR_TABLE, and 6 KB shared IPC SRAM (rpmsg_sh_mem at 0x489c8800). Under integrated DC-DC buck operation (VDD = 3.3 V), official NXP datasheet figures [28] report <55 µA/MHz typical active current (~5.3 mA @ 96 MHz), 4.60 mA TX current (0 dBm), 4.68 mA RX current, and <3.0 µA Power-Down sleep with 32 KB RAM and RTC retention (<1.5 µA Deep Power-Down)."
+));
 
-colChildren.push(subHeading("B", "Female 3.5mm AUX Audio Conditioning Circuitry"));
-colChildren.push(p("To interface standard wired earphones, lapel microphones, and auxiliary audio equipment, a female 3.5mm audio jack is connected to the microcontroller. Modern headsets adhere to the Cellular Telecommunications and Internet Association (CTIA) standard: Tip (Left Earphone), Ring 1 (Right Earphone), Ring 2 (Ground Reference), and Sleeve (Microphone Signal / PTT Switch Line)."));
+colChildren.push(subHeading("B", "Female 3.5 mm CTIA AUX Audio Conditioning & Pin Mapping"));
+colChildren.push(p(
+  "Standard mobile headsets follow the CTIA 4-pole TRRS pinout: Tip (Left/Mono Audio), Ring 1 (Right/Jack Detect), Ring 2 (Ground Reference), and Sleeve (Inline Microphone / PTT Switch). Electret microphone elements generate low-amplitude AC voltages (±10–100 mV) centered on ground, which would experience negative-cycle clipping if fed directly to a unipolar 0–3.3 V ADC. Pin PTA16 (LPADC0 Channel 0 / Arduino A0) therefore incorporates a C_1 = 10 µF series AC-coupling capacitor followed by a symmetric resistive divider (R_1 = R_2 = 10 kΩ) tied between VDD = 3.3 V and GND:"
+));
 
-colChildren.push(p("Electret and dynamic microphone capsules generate low-amplitude alternating voltages (10 mV to 100 mV peak-to-peak) centered around ground (0 V). Because the unipolar 16-bit analog-to-digital converter (LPADC0) on the FRDM-MCXW71 operates with an internal 3.3 V reference, directly applying an AC waveform would result in negative half-cycle clipping at 0 V, inducing severe harmonic distortion. To resolve this, an analog signal conditioning network is designed on pin PTA16 (LPADC0 Channel 0 / Arduino A0)."));
+colChildren.push(eq("V_bias = V_DD · [ R₂ / (R₁ + R₂) ] = 3.3 V · (10 kΩ / 20 kΩ) = 1.65 V", 1));
 
-colChildren.push(p("The conditioning circuit comprises a DC-blocking AC-coupling capacitor (C = 10 μF) in series with the Tip signal, and a precision symmetrical resistive voltage divider (R₁ = R₂ = 10 kΩ) tied between the regulated 3.3 V analog rail (VDD) and analog ground (GND). The resulting DC bias point V_bias is derived as:"));
+colChildren.push(p(
+  "With Thévenin resistance R_eq = R_1 ∥ R_2 = 5 kΩ, the high-pass cutoff frequency f_c,HPF of the AC-coupling stage is:"
+));
 
-colChildren.push(eq("V_bias = V_DD · [ R₂ / (R₁ + R₂) ] = 3.3 V · [ 10 kΩ / 20 kΩ ] = 1.65 V", 1));
+colChildren.push(eq("f_c,HPF = 1 / (2π · R_eq · C₁) = 1 / [ 2π · 5000 Ω · 10 µF ] ≈ 3.18 Hz", 2));
 
-colChildren.push(p("This 1.65 V DC offset accurately centers the alternating speech voltage in the linear middle of the LPADC0 input dynamic range (0 V to 3.3 V), allowing symmetric signal swings up to ±1.65 V without saturation. The high-pass cutoff frequency f_c of this RC coupling network is calculated using the Thévenin equivalent resistance R_eq = R₁ ∥ R₂ = 5 kΩ:"));
+colChildren.push(p(
+  "Sitting well below fundamental vocal pitch frequencies (85–255 Hz), this network maintains linear passband fidelity across human speech. Physical cable seating connects Ring 1 to PTA21 (Arduino D2) via internal pull-up (kPORT_PullUp, kPORT_HighPullResistor), pulling LOW upon insertion, while tactile inline PTT closure connects the Sleeve line to PTB0 (Arduino D4, Active LOW)."
+));
 
-colChildren.push(eq("f_c = 1 / (2π · R_eq · C) = 1 / [ 2π · (5000 Ω) · (10 μF) ] ≈ 3.18 Hz", 2));
+colChildren.push(subHeading("C", "Fixed-Point Dynamic DC Baseline Drift Tracking"));
+colChildren.push(p(
+  "Resistor tolerances (±1–5%) and battery voltage variations shift the true DC midpoint away from nominal 16-bit half-scale (32768). Left uncompensated, static DC bias triggers erroneous amplitude crossings inside the VAD energy detector. Inside Aux_SampleAudio(), LPADC0 samples single-ended input (kLPADC_SampleChannelSingleEndSideA, enableInDozeMode = true) and continuously tracks DC baseline B[n] via integer arithmetic bit-shifts (>> 7):"
+));
 
-colChildren.push(p("Because f_c ≈ 3.18 Hz sits substantially below the fundamental frequency of human vocal fold vibrations (typically 85 Hz for adult males and 165 Hz for adult females), the front-end provides a flat, distortion-free passband across the entire speech spectrum (20 Hz to 7 kHz)."));
+colChildren.push(eq("B[n] = B[n − 1] + ⌊ (x_ADC[n] − B[n − 1]) / 128 ⌋", 3));
+colChildren.push(eq("x̃[n] = x_ADC[n] − B[n]", 4));
 
-colChildren.push(p("For physical cable sensing, Ring 1 of the connector is wired to pin PTA21 (Arduino D2) configured as a digital input with an internal 20 kΩ pull-up resistor. When an AUX cable is seated, the mechanical leaf switch contacts the sleeve ground, pulling PTA21 from 3.3 V to 0 V (Active LOW), triggering a pin-change interrupt that notifies the firmware of hardware insertion. The Sleeve line is routed to pin PTB0 (Arduino D4) with internal pull-up to detect Push-to-Talk (PTT) switch closure."));
+colChildren.push(p(
+  "This single-pole integer IIR high-pass filter places a pole at α = 127/128 ≈ 0.9922 (~20 Hz tracking time constant at 16 kHz), eliminating hardware DC offset drift deterministically in integer registers without floating-point division."
+));
 
-// Insert Figure 2 Placeholder
+// Figure 2 Placeholder
 figPlaceholder(
   2,
-  "Analog Front-End Conditioning and AUX Interface Schematic",
-  "Circuit schematic of the female 3.5mm AUX interface connected to the NXP FRDM-MCXW71, detailing the 10 μF AC-coupling capacitor, 10 kΩ symmetric DC-biasing network on PTA16 (ADC0), jack insertion detect pin PTA21, and inline PTT switch line on PTB0."
+  "Mixed-Signal 3.5 mm AUX Conditioning, Jack-Detect, and PAM8403 Earphone Circuit Schematic.",
+  "Complete hardware schematic detailing 3.5 mm CTIA female jack wiring, 10 µF AC-coupling capacitor, dual 10 kΩ 1.65 V biasing network on PTA16, PTA21 jack-insertion detect, PTB0 PTT switch, and PTB1 RC-filtered output into the PAM8403 Class-D amplifier with active-low SHDN_N gating on PTB2.",
+  2700
 ).forEach(el => colChildren.push(el));
 
-colChildren.push(subHeading("C", "Acoustic Earphone/Speaker Feedback & Audio Amplifier Circuitry"));
-colChildren.push(p("To provide auditory confirmation and spoken readout of incoming messages, an amplified audio subsystem is interfaced with the microcontroller. Tone synthesis is executed via pin PTB1 (Arduino D3), mapped to the high-speed PWM Match 1 output of the general-purpose timer module (CTIMER0). The PWM carrier operates at a base clock frequency of f_FRO = 48 MHz, allowing high-resolution duty cycle modulations to produce precise square and pseudo-sinusoidal acoustic frequencies spanning 200 Hz to 4 kHz."));
+colChildren.push(subHeading("D", "Acoustic Feedback Chimes and Anti-Pop Hardware Gating"));
+colChildren.push(p(
+  "Earphone notification chimes and status prompts are synthesized digitally on PTB1 (SPK_AUDIO_PIN, Arduino D3) via Speaker_Tone() synchronized against core clock frequency via SDK_DelayAtLeastUs(), then smoothed by a first-order RC reconstruction low-pass filter (R_f = 1 kΩ, C_f = 10 nF):"
+));
 
-colChildren.push(p("To eliminate high-frequency PWM switching harmonics prior to amplification, a first-order passive RC low-pass reconstruction filter (R_filt = 1 kΩ, C_filt = 10 nF) is placed between PTB1 and the amplifier input. The corner frequency of this reconstruction filter is calculated as:"));
+colChildren.push(eq("f_c,LPF = 1 / (2π · R_f · C_f) = 1 / [ 2π · 1000 Ω · 10 nF ] ≈ 15.92 kHz", 5));
 
-colChildren.push(eq("f_c,audio = 1 / (2π · R_filt · C_filt) = 1 / [ 2π · (1000 Ω) · (10 nF) ] ≈ 15.91 kHz", 3));
+colChildren.push(p(
+  "Filtered signals feed a Class-D PAM8403 power stage driving the earphone earpiece or miniature 8 Ω speaker, with shutdown pin SHDN_N controlled by PTB2 (Arduino D5). Holding PTB2 LOW when idle suppresses background amplifier hiss and eliminates power-on pop transients. Speaker_PlayChime() renders three intuitive acoustic earcons: Chime 1 (880 Hz A5 -> 1320 Hz E6) for incoming WhatsApp alerts (opcode 0x10), Chime 2 (660 Hz -> 880 Hz) for recording/KWS wake activation, and Chime 3 (ascending C major arpeggio 523 -> 659 -> 784 -> 1046 Hz) for system boot and dispatch confirmation. Table II summarizes the prototype BOM."
+));
 
-colChildren.push(p("This filter smoothly suppresses switching ripple above 15.9 kHz while passing vocal frequencies unimpeded. The filtered analog signal is fed into a PAM8403 Class-D stereo/mono audio power amplifier, which drives an 8 Ω miniature speaker or the user's wired earphone earpieces. The PAM8403 delivers over 90% power efficiency. To prevent audible turn-on 'pop' and 'click' transients when the timer initiates or terminates, the amplifier's active-low shutdown pin (SHDN_N) is interfaced to microcontroller pin PTB2 (Arduino D5). The firmware maintains PTB2 in a logic LOW state during idle periods, keeping the amplifier in an ultra-low quiescent state (I_SD < 1 μA), and asserts PTB2 to logic HIGH only 20 ms prior to audio playback."));
-
-// Insert Figure 3 Placeholder
-figPlaceholder(
-  3,
-  "CTIMER0 PWM Audio Output and Amplifier Driving Circuit",
-  "Detailed circuit diagram of the acoustic feedback subsystem: pin PTB1 PWM output routed through the 1 kΩ + 10 nF low-pass reconstruction filter to the PAM8403 Class-D audio amplifier, driving the earphone/speaker load, with active mute control on pin PTB2."
-).forEach(el => colChildren.push(el));
-
-// =========================================================================
-// SECTION IV: FIRMWARE & BLE 5.3 TRANSMISSION PROTOCOL
-// =========================================================================
-secHeading("IV", "Firmware Architecture & BLE 5.3 Communication Protocol").forEach ? null : colChildren.push(secHeading("IV", "Firmware Architecture & BLE 5.3 Communication Protocol"));
-
-colChildren.push(subHeading("A", "Embedded Software Architecture & SDK Stack"));
-colChildren.push(p("The firmware on the NXP FRDM-MCXW71 is developed within the MCUXpresso IDE utilizing the NXP MCUXpresso Software Development Kit (SDK v2.14+) and the EdgeFast Bluetooth Host Stack, which implements the complete Bluetooth Core Specification v5.3 protocol layers [23]. The system initializes peripheral clocks, port pin multiplexing, the LPADC0 converter, CTIMER0, and registers interrupt service routines (ISRs) for GPIO lines PTA21 (Jack Detect) and PTB0 (PTT)."));
-
-colChildren.push(subHeading("B", "Custom GATT Architecture and Characteristic Mapping"));
-colChildren.push(p("The GATT server architecture defines a custom primary service identified by a 128-bit Universally Unique Identifier (UUID): 0000FFF0-0000-1000-8000-00805F9B34FB (0xFFF0). Three distinct characteristics are declared within this service:"));
-
-colChildren.push(p("1) Audio/Command TX Characteristic (UUID: 0xFFF1): Property: Notify. This endpoint provides an asynchronous uplink from the microcontroller to the mobile phone. It streams audio chunks and framing opcodes whenever the tactile PTT switch is held."));
-
-colChildren.push(p("2) Speaker/Audio RX Characteristic (UUID: 0xFFF2): Property: Write Without Response / Write. This downlink endpoint allows the mobile companion app to write notification alerts and reply text streams directly to the microcontroller to drive the earphone/speaker."));
-
-colChildren.push(p("3) Status & Telemetry Characteristic (UUID: 0xFFF3): Property: Read / Notify. This endpoint reports real-time hardware diagnostics, including AUX jack insertion status, battery voltage, and PTT switch telemetry."));
-
-colChildren.push(subHeading("C", "Three-Opcode Protocol Framing Finite State Machine"));
-colChildren.push(p("To minimize packet overhead while maintaining strict synchronization between the embedded audio sampler and the mobile natural language processor, an asymmetric 1-byte opcode framing protocol is deployed. The protocol state machine is illustrated in Fig. 4."));
-
-colChildren.push(p("1) OPCODE_START (0x01): When the blind user depresses the tactile PTT switch on PTB0, the firmware enters the RECORDING state, plays a discrete start earcon (660 Hz ramping to 880 Hz for 120 ms), and transmits a single-byte packet containing 0x01 to the smartphone. Upon receiving 0x01, the mobile app clears its audio accumulator buffer and pre-warms its speech recognition engine."));
-
-colChildren.push(p("2) OPCODE_DATA (0x02): While the PTT switch remains asserted, LPADC0 samples the analog voice signal on PTA16 at 16,000 Hz with 16-bit resolution. Samples are grouped into chunks of 120 samples (240 bytes). Each transmission frame prepends the 1-byte opcode 0x02 followed by the 240 bytes of signed 16-bit PCM data, yielding a 241-byte packet that fits into the 512-byte negotiated MTU without fragmentation."));
-
-colChildren.push(p("3) OPCODE_END (0x03): When the user releases the tactile PTT switch, sampling is halted, a completion earcon (523 Hz ascending to 1046 Hz) sounds in the user's earphone, and a single-byte frame with 0x03 is transmitted. The mobile app closes the buffer, triggers immediate speech-to-text transcription, and initiates the contact dispatch pipeline."));
-
-colChildren.push(p("4) Downlink Opcodes (0x10 and 0x20): When an incoming WhatsApp message is intercepted, the mobile app writes 0x10 ('OPCODE_NOTIF_ALERT') followed by the sender's name to characteristic 0xFFF2, commanding the microcontroller to pulse its blue status LED (PTA4) and emit a high-pitched double notification chime (880 Hz followed by 1320 Hz) into the earphone. When the user asks to hear the message, the phone writes 0x20 ('OPCODE_READOUT') followed by the message text, which the board plays through the PAM8403 amplifier."));
-
-// Insert Figure 4 Placeholder
-figPlaceholder(
-  4,
-  "Three-Opcode BLE Framing Protocol and Buffer State Machine",
-  "Finite state machine (FSM) and timing diagram detailing the transition sequence between IDLE, RECORDING, STREAMING, BUFFERING, and DISPATCHING states driven by opcodes 0x01 (START), 0x02 (DATA), 0x03 (END), 0x10 (ALERT), and 0x20 (READOUT)."
-).forEach(el => colChildren.push(el));
-
-colChildren.push(subHeading("D", "Ping-Pong Double Buffering and DMA Architecture"));
-colChildren.push(p("To eliminate audio sample drops during high-speed analog acquisition, the firmware utilizes double-buffered ping-pong RAM arrays: s_audio_ping[120] and s_audio_pong[120]. While LPADC0 populates the active buffer via direct memory access (DMA), the background BLE task formats and notifies the alternate buffer over characteristic 0xFFF1. Buffer index toggling occurs automatically upon DMA block completion, ensuring deterministic, jitter-free 16 kHz streaming without CPU polling."));
-
-// =========================================================================
-// SECTION V: MOBILE COMPANION APP & AUTOMATION ENGINE
-// =========================================================================
-secHeading("V", "Mobile Companion Application & Automation Engine").forEach ? null : colChildren.push(secHeading("V", "Mobile Companion Application & Automation Engine"));
-
-colChildren.push(subHeading("A", "Application Architecture and Hybrid Web Runtime"));
-colChildren.push(p("The mobile companion application is architected as a native Android application (Kotlin) integrating an accelerated hardware WebView runtime. The application layout implements a high-contrast white accessibility theme with distinct segmented tabs: Voice Assist, Settings & Devices, WhatsApp & Speaker, Contacts, and Hardware Pins. Communication between the JavaScript front-end and native Android subsystems is managed via an asynchronous AndroidBridge interface."));
-
-colChildren.push(subHeading("B", "Bluetooth Scanner Hub & Auto-Connection Engine"));
-colChildren.push(p("The BLE manager initiates low-latency scanning via Android's BluetoothLeScanner using ScanSettings.SCAN_MODE_LOW_LATENCY. When a peripheral advertising name matching 'FRDM-MCXW71-VOX' or advertising service 0xFFF0 is detected, the app automatically executes connectGatt(). Upon establishing the connection, the app immediately executes:"));
-
-colChildren.push(eq("gatt.requestMtu(512)", 4));
-
-colChildren.push(p("Negotiating a 512-byte MTU expands the Attribute Protocol payload beyond the standard 23-byte default, enabling 241-byte audio chunk transfers in single radio events. Following MTU negotiation, service discovery is invoked, and the Client Characteristic Configuration Descriptor (CCCD, UUID 0x2902) on 0xFFF1 is updated with BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE to activate real-time packet delivery."));
-
-colChildren.push(subHeading("C", "Intelligent NLP Parser and Dual-Metric Contact Matching"));
-colChildren.push(p("Voice commands spoken into the earphone microphone adhere to natural conversational syntax: 'Send message to [Contact Name] - [Message Body]'. The app strips common prefix phrases ('Send message to', 'Tell', 'WhatsApp to') and extracts the candidate contact string and message payload."));
-
-colChildren.push(p("Because speech recognition engines frequently introduce typographic and phonetic variations (e.g., 'Ashis' for 'Ashish Shettigar', 'Alec' for 'Alex', or 'Mum' for 'Mom'), a standard exact string search fails in over 34% of real-world trials [16]. To achieve robust resolution, VoxAssist deploys a dual-metric matching pipeline:"));
-
-colChildren.push(p("1) Damerau-Levenshtein Edit-Distance Matrix: Computes the minimum number of single-character insertions, deletions, substitutions, and adjacent character transpositions required to transform string s₁ into s₂ [28]. The recurrence relation is defined as:"));
-
-colChildren.push(eq("d_DL(i, j) = min { d(i-1, j) + 1, d(i, j-1) + 1, d(i-1, j-1) + cost, d(i-2, j-2) + 1 (if transposition) }", 5));
-
-colChildren.push(p("where cost = 0 if s₁[i] = s₂[j], else cost = 1. The string similarity is normalized to the unit interval [0, 1] via:"));
-
-colChildren.push(eq("StringSim(s₁, s₂) = 1.0 - [ d_DL(s₁, s₂) / max(|s₁|, |s₂|) ]", 6));
-
-colChildren.push(p("2) Phonetic Simplification Transformer P(s): Speech transcription errors are predominantly phonetic [16]. VoxAssist applies an acoustic phoneme reduction mapping that converts homophonic digraphs to canonical forms ('ph', 'gh' → 'f'; 'ck', 'qu', 'q' → 'k'; 'sh' → 's'; 'wh', 'w' → 'v'), collapses duplicate consonants, and standardizes diphthongs."));
-
-colChildren.push(p("3) Composite Similarity Metric: The final match score S(s_query, s_contact) combines both orthographic and phonetic dimensions with empirical weighting:"));
-
-colChildren.push(eq("S(s₁, s₂) = α · StringSim(s₁, s₂) + β · StringSim(P(s₁), P(s₂))", 7));
-
-colChildren.push(p("where α = 0.45 and β = 0.55. If S ≥ 0.55, the candidate contact is resolved. Furthermore, an alias dictionary resolves familial relationships ('mom' → ['mother', 'mummy', 'amma', 'maa'])."));
-
-// Insert Figure 5 Placeholder
-figPlaceholder(
-  5,
-  "Dual-Metric Phonetic and Damerau-Levenshtein Matching Matrix",
-  "Conceptual flowchart and calculation matrix illustrating how candidate transcripts undergo orthographic edit-distance calculation in parallel with phonetic simplification transformation, combining into the unified confidence score S."
-).forEach(el => colChildren.push(el));
-
-colChildren.push(subHeading("D", "Hands-Free WhatsApp Auto-Send via Accessibility Service"));
-colChildren.push(p("Once the contact is resolved, the companion app reformats the target phone number into international E.164 format (e.g., +91 98765 43210 → 919876543210), URL-encodes the extracted message body, and triggers a deep link intent:"));
-
-colChildren.push(eq("https://api.whatsapp.com/send?phone=[Phone_Number]&text=[URL_Encoded_Message]", 8));
-
-colChildren.push(p("Ordinarily, WhatsApp opens with the chat text box populated, requiring the user to locate and tap the visual 'Send' button. For blind individuals, this manual touch requirement destroys the assistive paradigm. To eliminate screen taps, VoxAssist deploys WhatsAppAccessibilityService.kt."));
-
-colChildren.push(p("Upon launching the WhatsApp activity, the accessibility service detects the TYPE_WINDOW_STATE_CHANGED event and traverses the active AccessibilityNodeInfo tree [24]. It searches for the send button via its known view ID:"));
-
-colChildren.push(p("• Standard WhatsApp: com.whatsapp:id/send"));
-colChildren.push(p("• WhatsApp Business: com.whatsapp.w4b:id/send"));
-
-colChildren.push(p("If obfuscated, it performs recursive inspection matching contentDescription equal to 'Send'. Upon locating the node, it invokes node.performAction(AccessibilityNodeInfo.ACTION_CLICK). After a 1500 ms delay ensuring delivery across cellular sockets, it executes performGlobalAction(GLOBAL_ACTION_BACK), automatically returning the user to the VoxAssist dashboard without requiring a single touch on the capacitive glass."));
-
-// Insert Figure 6 Placeholder
-figPlaceholder(
-  6,
-  "Accessibility Service Zero-Touch Auto-Send Sequence",
-  "Unified sequence diagram illustrating deep-link intent generation, WhatsApp window hierarchy traversal, View ID discovery (com.whatsapp:id/send), programmatic ACTION_CLICK synthesis, and automatic return to the host application."
-).forEach(el => colChildren.push(el));
-
-colChildren.push(subHeading("E", "Bidirectional Reply Interception & Spoken Readout"));
-colChildren.push(p("To achieve conversational parity, VoxAssist implements VoxNotificationListenerService.kt. This service binds to Android's notification pipeline, filtering events matching com.whatsapp. It filters out system notices ('Checking for new messages', 'WhatsApp Web active') and extracts Notification.EXTRA_TITLE (sender name) and Notification.EXTRA_TEXT (message body)."));
-
-colChildren.push(p("When an incoming reply arrives, the app dispatches opcode 0x10 to the FRDM-MCXW71, triggering the acoustic chime and blue LED pulse. Simultaneously, the smartphone speaks into the wired earphone: 'New message from [Sender]'. If the user says 'What is the reply' or 'Read out', the NLP engine identifies the query intent, formats the stored message, speaks it through the smartphone TTS into the earphone, and transmits opcode 0x20 to stream the text to the board's PAM8403 amplifier."));
-
-// =========================================================================
-// SECTION VI: EXPERIMENTAL RESULTS & EVALUATION
-// =========================================================================
-secHeading("VI", "Experimental Results & Performance Analysis").forEach ? null : colChildren.push(secHeading("VI", "Experimental Results & Performance Analysis"));
-
-colChildren.push(p("To rigorously benchmark the VoxAssist architecture against prior published systems, empirical evaluations were conducted focusing on: (1) end-to-end pipeline latency, (2) contact resolution accuracy under phonetic variance, (3) power consumption across operating states, and (4) usability with visually impaired participants."));
-
-colChildren.push(subHeading("A", "End-to-End Pipeline Latency"));
-colChildren.push(p("Latency was measured across 100 consecutive voice message dispatches using high-resolution oscilloscope timestamps on the FRDM-MCXW71 GPIO pins correlated with Android logcat events. The pipeline breakdown is presented in Table II."));
-
-// Insert Table II
+// TABLE II: BOM
 tableElement(
   "II",
-  "End-to-End Pipeline Latency Breakdown",
-  ["Processing Stage", "Mean Latency (ms)", "Std. Dev. (ms)", "Proportion (%)"],
+  "Prototype Hardware Bill of Materials (BOM) Breakdown",
+  ["Subsystem / Component", "Part Specification", "MCU Pinout", "Unit Cost ($)"],
   [
-    ["Analog Acquisition & Sampling (120-sample chunk)", "7.5", "0.4", "4.3%"],
-    ["BLE 5.3 MTU-512 Notification Transfer", "14.2", "1.8", "8.2%"],
-    ["ASR Transcription (On-Device Speech Recognizer)", "62.4", "8.5", "36.0%"],
-    ["Dual-Metric NLP & Contact Resolution", "8.1", "1.2", "4.7%"],
-    ["WhatsApp Intent Launch & View Tree Discovery", "65.3", "9.4", "37.7%"],
-    ["Accessibility ACTION_CLICK Execution", "15.8", "2.1", "9.1%"],
-    ["Total End-to-End Dispatch Latency", "173.3", "12.6", "100.0%"]
+    ["Wireless MCU Board", "NXP FRDM-MCXW71 (Cortex-M33, BLE 5.3)", "USB-C MCU-Link", "12.50"],
+    ["Wired Headset + Mic", "Commercial 3.5 mm TRRS CTIA Earphones", "AUX Tip & Sleeve", "1.80"],
+    ["3.5 mm Female Jack", "4-Pole CTIA Socket w/ Insertion Switch", "PTA16, PTA21, PTB0", "0.35"],
+    ["Conditioning Passives", "10 µF Cap + 10 kΩ Divider + 1 kΩ / 10 nF RC", "PTA16 / PTB1", "0.45"],
+    ["Class-D Audio Amp", "PAM8403 Miniature Stereo/Mono Module", "PTB1 (In+), PTB2 (Mute)", "0.65"],
+    ["Miniature Speaker", "8 Ω 1 W Auxiliary Feedback Load", "PAM8403 SPK+/SPK-", "0.55"],
+    ["Battery & Charger", "3.7 V LiPo Cell + TP4056 Protection Module", "3.3V System Rail", "2.40"],
+    { cells: ["Total Prototype Cost", "Complete Accessible Cyber-Physical Node", "Sub-$20 Objective Met", "$18.70"], _highlight: true }
   ],
-  "Measured across 100 trials over a 2.4 GHz RF environment with Google Pixel 7 (Android 14) and NXP FRDM-MCXW71."
+  "Representative single-unit prototype cost vs. $50–$250+ commercial smart speakers [10], [12].",
+  [27, 36, 22, 15]
 ).forEach(el => colChildren.push(el));
 
-colChildren.push(p("The total mean end-to-end latency from the moment the user releases the tactile PTT switch to the moment the WhatsApp message is dispatched over the cellular network was 173.3 ms. This is well below the 250 ms threshold for human perceptual immediacy, providing an experience that feels instantaneous."));
+// =========================================================================
+// IV. TINYML KEYWORD SPOTTING ENGINE AND EMBEDDED FIRMWARE
+// =========================================================================
+colChildren.push(secHeading("IV", "TinyML Keyword Spotting Engine and Embedded Firmware"));
 
-colChildren.push(subHeading("B", "Fuzzy Contact Matching Accuracy"));
-colChildren.push(p("We benchmarked the dual-metric matching algorithm against standard exact matching and pure Levenshtein distance across 250 spoken trials containing deliberate mispronunciations, homophones, and background noise. Results are detailed in Table III."));
+colChildren.push(subHeading("A", "Synthetic 16 kHz Audio Corpus Pipeline (generate_dataset.ps1)"));
+colChildren.push(p(
+  "Because generic speech benchmarks [29] exclude specialized wake triggers tailored to visually impaired voice gateways, an automated dataset generator (generate_dataset.ps1) was scripted around the .NET System.Speech.Synthesis engine configured cleanly for 16.0 kHz, 16-bit Signed Mono PCM formatting (16,000 samples / 1.0 s duration per clip). Three target wake triggers—'parity', 'hello parity', and 'hey parity'—were synthesized across dual male (David) and female (Zira) voice profiles sweeping seven distinct speaking rates (-6, -4, -2, 0, +2, +4, +6), centrally padded and peak-normalized to ±26,000 LSB. To enforce resilience against noise and mains hum, 29 negative recordings were synthesized in Python: 25 Gaussian ambient noise profiles (std 60–250 LSB) and 4 narrowband power-line hum signals (50, 60, 100, and 120 Hz at 350 LSB). The curated corpus comprises 73 balanced clips (noise: 29, parity: 16, hello_parity: 14, hey_parity: 14)."
+));
 
-// Insert Table III
+colChildren.push(subHeading("B", "Spectral Extraction and Compact 2D-CNN Topology (train_kws.py)"));
+colChildren.push(p(
+  "During offline training (train_kws.py), each 16,000-sample waveform passes through a Short-Time Fourier Transform (frame_length = 512, frame_step = 256 -> 61 × 257 magnitude matrix) resized bilinearly into a compact 32 × 16 (512-element) time-frequency grid. On-device in parity_kws_model.h, KWS_ExtractSpectrogram() extracts matching 32-time-slice × 16-band RMS subband envelopes (500 samples/slice) directly from raw int16_t arrays within 148 bytes of compiled Thumb-2 code."
+));
+
+colChildren.push(p(
+  "To preserve compatibility with microcontroller Flash budgets without sacrificing spatial spectral selectivity, our TensorFlow/Keras CNN substitutes parameter-heavy Flatten+Dense tails [16] with a GlobalAveragePooling2D() layer following the second convolutional stage (Conv2D(16, 3×3)). Pooling across spatial feature maps (16, 8, 16) condenses feature representation into 16 compact scalar descriptors before classification. Total trainable weights shrink to just 1,588 parameters (6,352 bytes in Flash rodata, Table III)—75.5× smaller than the STM32 CNN baseline reported in [16] (119,936 weights) while requiring only 184,640 multiply-accumulate (MAC) operations per classification."
+));
+
+// TABLE III: Model Architecture & Exact ELF Sizes
 tableElement(
   "III",
-  "Contact Resolution Accuracy Under Speech Variance",
-  ["Spoken Input Query", "True Target Contact", "Exact Match", "Levenshtein", "VoxAssist Dual-Metric"],
+  "VisioTinyML 2D-CNN Topology and Verified ELF Symbol Sizes",
+  ["Layer / C Symbol", "Output Shape", "Params", "ELF Flash (B)", "MAC Ops"],
   [
-    ["'Send message to Mom'", "Mom", "100.0%", "100.0%", "100.0%"],
-    ["'Send message to Mum'", "Mom (Alias)", "0.0%", "52.0%", "100.0%"],
-    ["'Message to Ashis'", "Ashish Shettigar", "0.0%", "36.0%", "98.0%"],
-    ["'Tell Alec'", "Alex", "0.0%", "64.0%", "96.0%"],
-    ["'Message to Docter'", "Doctor", "0.0%", "72.0%", "100.0%"],
-    ["'Tell Didi I am home'", "Sister (Alias)", "0.0%", "0.0%", "96.0%"],
-    ["Overall Average Accuracy", "—", "16.7%", "54.0%", "98.4%"]
+    ["Input (spec[32][16])", "(32, 16, 1)", "0", "—", "—"],
+    ["Conv2D_1 (8× 3×3, same, ReLU)\ng_kws_w_conv1 / b_conv1", "(32, 16, 8)", "80", "288 + 32\n(320 B)", "36,864"],
+    ["MaxPooling2D (2×2)", "(16, 8, 8)", "0", "—", "—"],
+    ["Conv2D_2 (16× 3×3, same, ReLU)\ng_kws_w_conv2 / b_conv2", "(16, 8, 16)", "1,168", "4,608 + 64\n(4,672 B)", "147,456"],
+    ["GlobalAveragePooling2D", "(16)", "0", "—", "~2,048 adds"],
+    ["Dense_1 (16 -> 16, ReLU)\ng_kws_w_dense1 / b_dense1", "(16)", "272", "1,024 + 64\n(1,088 B)", "256"],
+    ["Dense_2 (16 -> 4, Softmax)\ng_kws_w_dense2 / b_dense2", "(4)", "68", "256 + 16\n(272 B)", "64"],
+    ["Executable KWS Routines\nKWS_ClassifyAudio + ExtractSpec", "ARM Thumb-2", "—", "996 + 148\n(1,144 B)", "—"],
+    { cells: ["Total Standalone C Engine", "4 Classes", "1,588", "7,496 B\n(7.32 KB)", "184,640 MACs"], _highlight: true }
   ],
-  "Evaluated over 250 acoustic trials across 5 distinct native and non-native English accents."
+  "Symbol byte counts verified via arm-none-eabi-nm --size-sort on Debug/frdmmcxw7x_wireless_uart_bm.axf.",
+  [33, 18, 13, 20, 16]
 ).forEach(el => colChildren.push(el));
 
-colChildren.push(p("As shown in Table III, conventional exact matching achieved only 16.7% success due to pronunciation variations, while standard Levenshtein distance reached 54.0%. VoxAssist's hybrid phonetic-Levenshtein engine achieved 98.4% accuracy, effectively eliminating contact resolution failures."));
+// Figure 3 Placeholder
+figPlaceholder(
+  3,
+  "TinyML Spectrogram Feature Extraction and Global-Average-Pooled 2D-CNN Architecture.",
+  "Block architecture tracing 16 kHz raw PCM (16,000 samples) -> 32×16 spectrogram extraction -> Conv2D (8 filters, 3×3) -> MaxPool (2×2) -> Conv2D (16 filters, 3×3) -> GlobalAveragePooling2D -> Dense (16) -> 4-Class Softmax (noise, parity, hello_parity, hey_parity).",
+  2600
+).forEach(el => colChildren.push(el));
 
-colChildren.push(subHeading("C", "Power Consumption & Battery Longevity"));
-colChildren.push(p("Power consumption of the NXP FRDM-MCXW71 was measured using a Keysight N6705C DC Power Analyzer at 3.3 V supply. Results across operational states are compiled in Table IV."));
+colChildren.push(subHeading("C", "Standalone C Inference and Headless Boot Verification"));
+colChildren.push(p(
+  "The training pipeline outputs both a 6,672-byte dynamic-range quantized flatbuffer (parity_kws_model.tflite) and a dependency-free C inference header (parity_kws_model.h) defining KWS_ClassifyAudio(const int16_t *audio, float *out_confidence). Inside VoxAssist_Init() at startup, the Cortex-M33 executes a self-diagnostic pass over g_test_audio_sample (test_audio_vector.h, 16,000 signed 16-bit PCM samples = 32,000 bytes of spoken 'parity'), playing acoustic Chime 2 upon positive wake verification—allowing complete neural validation on hardware prior to attaching physical microphone capsules."
+));
 
-// Insert Table IV
+colChildren.push(subHeading("D", "Hands-Free VAD and 16.25 KB Lossless Ring Buffer"));
+colChildren.push(p(
+  "Inside the real-time loop VoxAssist_Process(), idle polling checks baseline-subtracted voice amplitude |x̃[n]| > VAD_THRESHOLD_AMPLITUDE (1400 LSB). Triggering across VAD_TRIGGER_CONSECUTIVE_CNT = 2 consecutive samples—or physical PTB0 PTT depression—switches s_voice_active = true, emits OPCODE_START (0x01), and packs 60-sample (120-byte) audio frames (~16 kHz, 3.75 ms duration) alongside OPCODE_DATA (0x02) into 121-byte BLE packets. Once minimum utterance duration (VAD_MIN_SPEECH_CHUNKS = 35, ~131 ms) passes, VAD_SILENCE_TIMEOUT_CHUNKS = 320 (~1.2 s continuous quiet) signals OPCODE_END (0x03) automatically and permits WFI low-power sleep."
+));
+
+colChildren.push(p(
+  "Because mobile BLE central stacks occasionally stall notifications across connection events, streaming directly from interrupt loops causes irreversible audio clipping. In wireless_uart.c, a static circular FIFO ring buffer s_audio_ring_buf[128] (128 packets × 130 B struct = 16,640 bytes / 16.25 KB in .bss) stores up to 480 ms of active speech. Calling BleApp_NotifyPacket() appends frames atomically at s_ring_head via BleApp_QueuePacket(), while BleApp_ProcessTxQueue() dispatches packets at s_ring_tail via GattServer_SendInstantValueNotification(). Whenever controller buffers return gBleOverflow_c or gBleOutOfMemory_c, s_ring_tail pauses without incrementing while VoxAssist_IsBusy() blocks WFI sleep, ensuring lossless queue flushing once RF congestion clears."
+));
+
+// Figure 4 Placeholder
+figPlaceholder(
+  4,
+  "Lossless 16.25 KB Circular FIFO Ring Buffer, BLE Backpressure FSM, and VAD Timing Flow.",
+  "Timing and finite-state diagram mapping LPADC0 sampling -> IIR baseline subtraction -> VAD trigger/silence timers -> 128-slot ring buffer queue/dequeue -> gBleOverflow_c retry holding read pointer -> Three-Opcode transport (0x01 START, 0x02 DATA, 0x03 END).",
+  2600
+).forEach(el => colChildren.push(el));
+
+// =========================================================================
+// V. ANDROID COMPANION APPLICATION AND WHATSAPP AUTOMATION
+// =========================================================================
+colChildren.push(secHeading("V", "Android Companion Application and Zero-Touch Automation"));
+
+colChildren.push(subHeading("A", "Multi-Profile BLE GATT Discovery Engine (MainActivity.kt)"));
+colChildren.push(p(
+  "Implemented in Kotlin (minSdk 26, targetSdk 34) with an accessible high-contrast WebView front-end and AndroidBridge hooks, the companion application initiates BluetoothLeScanner in SCAN_MODE_LOW_LATENCY, isolating boards advertising 'FRDM-VOX', 'FRDM-MCXW71-VOX', 'MCXW71', or 'Vox'. Following connection, MainActivity calls gatt.requestMtu(512) prior to discoverServices(), binding flexibly across Custom Assistive Service (0xFFF0/0xFFF1/0xFFF2), NXP Wireless UART (01ff5550-... / 01ff0100-...), or falling back to the first PROPERTY_NOTIFY characteristic (uuid_uart_stream) before writing ENABLE_NOTIFICATION_VALUE to its CCCD (0x2902) [15]."
+));
+
+colChildren.push(subHeading("B", "Multi-Wake-Phrase Regex and Hybrid NLP Contact Matcher"));
+colChildren.push(p(
+  "Recognized voice transcripts are screened against the multi-trigger wake pattern \\b((hello|hey|hi)\\s+)?(parity|parody|perry|pairity)\\b, accepting 'parity', 'hello parity', and 'hey parity' alongside common speech-recognizer homophones. Because proper nouns in regional accents routinely defeat literal string equality, computeContactSimilarity() evaluates a weighted fusion of orthographic and phonetic similarity. First, Damerau-Levenshtein edit distance d_DL(s_1, s_2) accounts for insertions, deletions, substitutions, and adjacent transpositions [30]:"
+));
+
+colChildren.push(eq("StringSim(s₁, s₂) = 1.0 − [ d_DL(s₁, s₂) / max(|s₁|, |s₂|) ]", 6));
+
+colChildren.push(p(
+  "Second, a rule-based phonetic transformer P(s) collapses homophonic English and South-Asian consonant/vowel variants (ph,gh->f; ck,kh,qu->k; sh->s; th->t; dh->d; bh->b; wh,w->v; c->s/k) and consecutive duplicates, generating composite score S:"
+));
+
+colChildren.push(eq("S(s₁, s₂) = 0.45 · StringSim(s₁, s₂) + 0.55 · StringSim(P(s₁), P(s₂))", 7));
+
+colChildren.push(p(
+  "Scores S ≥ 0.55 accept the target recipient, augmented by a nine-category kinship alias lexicon (mom -> mother, mum, amma, maa, aai; dad -> father, papa, appa; sister -> didi, akka; brother -> bhai, anna) awarding 0.98 confidence."
+));
+
+colChildren.push(subHeading("C", "Zero-Touch WhatsAppAccessibilityService and Reply Interception"));
+colChildren.push(p(
+  "Resolved E.164 phone numbers launch WhatsApp directly via Android deep linking:"
+));
+
+colChildren.push(eq("https://api.whatsapp.com/send?phone=[E164]&text=[UTF8_Msg]", 8));
+
+colChildren.push(p(
+  "When WhatsApp opens, WhatsAppAccessibilityService.kt intercepts TYPE_WINDOW_STATE_CHANGED events [27], searches the AccessibilityNodeInfo tree for com.whatsapp:id/send or com.whatsapp.w4b:id/send (with recursive 'Send' text fallback), invokes performAction(ACTION_CLICK) with zero screen contact, and triggers GLOBAL_ACTION_BACK after 1,500 ms to return autonomously to VisioTinyML. In parallel, VoxNotificationListenerService.kt listens on incoming com.whatsapp notifications, suppresses background sync banners, caches the latest 20 messages, dispatches BLE opcode 0x10 to sound a private in-ear chime, and answers spoken queries ('Read out' / 'What is the reply') through TTS and BLE opcode 0x20."
+));
+
+// Figure 5 Placeholder
+figPlaceholder(
+  5,
+  "Dual-Metric Phonetic Contact Matching and WhatsApp Accessibility DOM Auto-Send Flowchart.",
+  "Sequence workflow mapping Speech Transcript -> Wake Phrase Stripping -> Orthographic/Phonetic Matching Matrix -> WhatsApp Intent Launch -> AccessibilityNodeInfo View ID Search (com.whatsapp:id/send) -> Synthetic ACTION_CLICK -> NotificationListener In-Ear Alert Loop.",
+  2600
+).forEach(el => colChildren.push(el));
+
+// =========================================================================
+// VI. EXPERIMENTAL RESULTS, MEMORY DATASHEET, AND VERIFICATION
+// =========================================================================
+colChildren.push(secHeading("VI", "Experimental Results, Memory Datasheet, and Verification"));
+
+colChildren.push(p(
+  "To ensure full empirical transparency and technical credibility, every quantitative figure presented below derives directly from verified toolchain artifacts: (1) stratified 5-fold cross-validation and quantized TFLite evaluation across the 73-clip corpus, (2) arm-none-eabi-size and arm-none-eabi-nm inspection of the compiled firmware ELF binary (frdmmcxw7x_wireless_uart_bm.axf), and (3) documented electrical limits from the NXP MCXW71 datasheet [28]."
+));
+
+colChildren.push(subHeading("A", "TinyML KWS 5-Fold Cross-Validation and TFLite Metrics"));
+colChildren.push(p(
+  "The compact 2D-CNN (Adam lr = 0.005, categorical cross-entropy, 50 epochs, batch size 8) was evaluated using stratified 5-fold cross-validation (seed = 42) over all 73 audio samples. Across the five held-out test folds, classification accuracies measured 87.50%, 93.33%, 100.00%, 93.33%, and 100.00%, achieving an overall mean validation accuracy of 94.83% ± 4.73%. Concurrently, evaluating the exported dynamic-range INT8 quantized flatbuffer (parity_kws_model.tflite, 6,672 bytes) yielded 94.52% accuracy (69/73 correct, 83.06% mean softmax confidence)."
+));
+
+colChildren.push(p(
+  "As reflected in the pooled 5-fold validation confusion matrix (Table IV), zero negative noise or 50–120 Hz power-line hum clips (0/29) caused false wake activations (100.0% precision and recall on noise), and zero target utterances (0/44) were dropped as background noise. All four intra-class substitutions occurred strictly among phonetically overlapping wake phrases (hello_parity vs. hey_parity vs. parity)—demonstrating 100.0% (73/73) binary Wake-versus-Noise reliability."
+));
+
+// TABLE IV: Confusion Matrix & Per-Class Metrics
 tableElement(
   "IV",
-  "NXP FRDM-MCXW71 Energy Profile Across Operating States",
-  ["Operational State", "Active Hardware Blocks", "Current Draw (mA)", "Power (mW)"],
+  "Pooled 5-Fold Stratified Cross-Validation Confusion Matrix and F1 Scores",
+  ["True \\ Pred", "noise", "parity", "hello_parity", "hey_parity", "Prec / Rec / F1"],
   [
-    ["Deep Sleep / Idle", "RAM retention, RTC, PTA21/PTB0 wake interrupts", "0.038 mA", "0.125 mW"],
-    ["BLE Advertising (100 ms)", "2.4 GHz Radio TX (+0 dBm), Core 48 MHz", "3.24 mA", "10.69 mW"],
-    ["Active Voice Sampling", "LPADC0 16 kHz, DMA, CTIMER0, Radio Streaming", "7.85 mA", "25.90 mW"],
-    ["Acoustic Speaker Playback", "PAM8403 Amp Active, CTIMER0 PWM Tone, 8 Ω SPK", "42.60 mA", "140.58 mW"]
+    ["noise (n=29)", "29", "0", "0", "0", "100 / 100 / 100%"],
+    ["parity (n=16)", "0", "15", "1", "0", "93.8 / 93.8 / 93.8%"],
+    ["hello_parity (n=14)", "0", "0", "13", "1", "86.7 / 92.9 / 89.7%"],
+    ["hey_parity (n=14)", "0", "1", "1", "12", "92.3 / 85.7 / 88.9%"],
+    { cells: ["5-Fold Mean Acc", "—", "—", "—", "—", "94.83% ± 4.73%"], _highlight: true }
   ],
-  "Supply voltage VDD = 3.3 V. Quiescent sleep achieves over 320 days of standby on a standard 300 mAh LiPo battery."
+  "100.0% (73/73) Wake-vs-Noise discrimination across held-out validation splits. Exported 6,672 B TFLite achieved 94.52% (69/73).",
+  [23, 10, 10, 13, 13, 31]
 ).forEach(el => colChildren.push(el));
 
-colChildren.push(p("Powered by a compact 300 mAh lithium-polymer (LiPo) battery, VoxAssist delivers over 38 hours of continuous voice streaming and up to 320 days of standby sleep, comfortably supporting full-day mobile assistive usage. In sharp contrast to commercial voice assistants that draw >1,500 mW continuously to listen for wake words [12], VoxAssist draws only 0.125 mW in idle sleep, waking up exclusively on physical PTT switch depression."));
+// Figure 6 Placeholder
+figPlaceholder(
+  6,
+  "KWS 4-Class Confusion Matrix Heatmap and 50-Epoch Training Convergence Curves.",
+  "Two-panel experimental figure: (Left) 4×4 confusion matrix confirming zero false noise triggers across noise, parity, hello_parity, and hey_parity; (Right) Training accuracy and cross-entropy loss progression across 50 epochs.",
+  2600
+).forEach(el => colChildren.push(el));
 
-colChildren.push(subHeading("D", "User Evaluation with Visually Impaired Participants"));
-colChildren.push(p("A formal user study was conducted with 12 visually impaired participants (aged 21 to 64; 7 totally blind, 5 low vision). Each participant completed 10 messaging tasks using standard Android TalkBack versus VoxAssist. Metrics included Task Completion Rate, Mean Time-to-Send, and Subjective Cognitive Workload assessed via the NASA Task Load Index (NASA-TLX, 0–100 scale) [29]. Results are presented in Table V."));
+colChildren.push(subHeading("B", "Verified ARM Cortex-M33 ELF Memory Footprint Datasheet"));
+colChildren.push(p(
+  "Static link analysis on the compiled binary (frdmmcxw7x_wireless_uart_bm.axf) via arm-none-eabi-size and arm-none-eabi-nm verifies balanced Flash and SRAM consumption within internal SoC boundaries (Table V). Program Flash utilizes 205,512 bytes (20.40% of 984 KB), while SRAM consumes 76,296 bytes (67.12% of 111 KB user SRAM)—jointly housing the full NXP BLE 5.3 Host Stack, 16.25 KB lossless audio ring buffer, and 30.14 KB TinyML activation buffers without external DRAM."
+));
 
-// Insert Table V
+// TABLE V: Compiled Memory Footprint
 tableElement(
   "V",
-  "User Evaluation: VoxAssist vs. Standard TalkBack (n = 12)",
-  ["Evaluation Metric", "TalkBack Screen Reader [5]", "VoxAssist Cyber-Physical", "Improvement (%)"],
+  "Compiled MCXW71 ELF Memory Datasheet (arm-none-eabi-size)",
+  ["Memory Region / Component", "Allocated", "Available", "Utilization"],
   [
-    ["Task Completion Rate (%)", "71.4%", "97.2%", "+36.1%"],
-    ["Mean Time-to-Send (seconds)", "46.8 s", "8.7 s", "81.4% faster"],
-    ["Accidental Tap Errors per Task", "4.2 errors", "0.1 errors", "97.6% reduction"],
-    ["NASA-TLX Cognitive Workload (0-100)", "74.6", "18.2", "75.6% lower workload"],
-    ["Perceived Privacy Rating (1-5 Likert)", "1.8", "4.7", "+161.1%"]
+    ["PROGRAM_FLASH (.text+.data+.exidx)", "205,512 B", "1,007,616 B (984 KB)", "20.40%"],
+    ["  ├─ TinyML C Weights (6,352 B) + Code (1,144 B)", "7,496 B", "984 KB", "0.74%"],
+    ["  ├─ PCM Test Vector (g_test_audio_sample)", "32,000 B", "984 KB", "3.18%"],
+    ["  └─ BLE Host Stack, SDK & App Logic", "166,016 B", "984 KB", "16.48%"],
+    ["NVM_region (BLE Bonding Flash)", "32,768 B", "32,768 B (32 KB)", "100.0%"],
+    ["Application SRAM (.data+.bss+.heap)", "76,296 B", "113,664 B (111 KB)", "67.12%"],
+    ["  ├─ TinyML Activation Tensors (conv1/conv2/pool1/spec)", "30,864 B", "111 KB", "27.15%"],
+    ["  ├─ Lossless Ring Buffer (s_audio_ring_buf[128])", "16,640 B", "111 KB", "14.64%"],
+    ["  └─ BLE memHeap (13,000 B) + Stack/SDK", "28,792 B", "111 KB", "25.33%"],
+    ["Shared NBU Radio IPC (rpmsg_sh_mem)", "6,144 B", "6,144 B (6 KB)", "100.0%"]
   ],
-  "Statistically significant across all dimensions with p < 0.001 (paired two-tailed t-test)."
+  "Exact linker section sizes directly extracted from Debug/frdmmcxw7x_wireless_uart_bm.axf and output.map.",
+  [44, 18, 24, 14]
 ).forEach(el => colChildren.push(el));
 
-colChildren.push(p("As detailed in Table V, VoxAssist reduced average message dispatch time from 46.8 seconds to 8.7 seconds (an 81.4% acceleration) while reducing cognitive workload from 74.6 down to 18.2 on the NASA-TLX scale. Participants particularly praised the physical tactile button and localized earphone audio readout, which eliminated the social stigma and privacy loss associated with public screen-reader broadcasts."));
+colChildren.push(subHeading("C", "Packet Timing Budget and NXP Datasheet Power Envelopes"));
+colChildren.push(p(
+  "Sampling at 16 kHz across 60-sample segments (AUDIO_CHUNK_SAMPLES = 60) yields 120 bytes of uncompressed PCM payload every 3.75 ms, enclosed with opcode 0x02 into a 121-byte BLE notification cleanly accommodated by the negotiated 512-byte ATT MTU. Even at 256 kbps peak continuous PCM throughput, the 128-slot ring buffer buffers 480 ms of uninterrupted speech during transient RF congestion. Grounded in NXP's MCXW71 DC-DC buck electrical datasheet [28], active radio TX bursts draw 4.60 mA (0 dBm, 15.2 mW @ 3.3 V), RX draws 4.68 mA, active 96 MHz Cortex-M33 execution draws ~5.3 mA, and Power-Down standby sleep draws <3.0 µA (<0.01 mW)—representing orders-of-magnitude power reduction compared against 1.5–2.5 W smart speakers [12] and 1.18 W Cortex-M7 external-RAM rigs [16]."
+));
+
+colChildren.push(subHeading("D", "Technical Benchmark Against Referenced KWS Papers"));
+colChildren.push(p(
+  "Table VI directly contrasts VisioTinyML's model compactness and functional integration against the three peer-reviewed embedded KWS reference systems [16], [21], [23]. Replacing flattened fully connected matrices with Global Average Pooling shrinks trainable parameters by 75.5× relative to [16], cuts MAC operations by 61.3%, improves hold-out classification accuracy relative to [21], and uniquely adds BLE 5.3 + Android UI automation."
+));
+
+// TABLE VI: KWS Literature Comparison
+tableElement(
+  "VI",
+  "Direct Quantitative Comparison Against Referenced KWS Studies",
+  ["Metric / Capability", "Abbas & Ahmad [21]", "Wang & Li [16]", "Shili et al. [23]", "VisioTinyML (Ours)"],
+  [
+    ["Audio Transducer", "PDM MEMS (16 kHz)", "WM8978 I2S (16 kHz)", "Analog MEMS (8 kHz)", "3.5mm Aux (16 kHz)"],
+    ["Trainable Params", "Edge Impulse CNN", "119,936 params", "2,040 weights (MLP)", "1,588 params"],
+    ["Weight Memory", "37.6 KB (INT8 Flash)", "468.5 KB (Float32)", "Q15 static array", "6.35 KB C / 6.67 KB TFL"],
+    ["MAC Complexity", "3× 1D-Conv MFCC", "476,576 MACs", "2,050 MACs (Time)", "184,640 MACs"],
+    ["Reported Accuracy", "84.51% (GSC Test)", "~90.0% (GSC Val)", ">90.0% (Quiet Lab)", "94.83% CV / 94.52% TFL"],
+    { cells: ["Mobile OS Action", "None (Board LEDs)", "None (UART terminal)", "None (Motor GPIO)", "BLE 5.3 + WhatsApp A11y"], _highlight: true }
+  ],
+  "VisioTinyML memory sizes and MAC figures are verified directly from compiled ELF symbols and parity_kws_model.h.",
+  [21, 20, 19, 19, 21]
+).forEach(el => colChildren.push(el));
 
 // =========================================================================
-// SECTION VII: DISCUSSION & PRACTICAL CONSIDERATIONS
+// VII. LIMITATIONS, CHALLENGES, AND FUTURE SCOPE
 // =========================================================================
-secHeading("VII", "Discussion & Practical Considerations").forEach ? null : colChildren.push(secHeading("VII", "Discussion & Practical Considerations"));
+colChildren.push(secHeading("VII", "Limitations, Challenges, and Future Scope"));
 
-colChildren.push(p("1) Frugal Engineering vs. Smart Speaker Pods: Standalone smart speakers have failed to penetrate low-income assistive demographics because of high unit retail prices and rigid infrastructure requirements. By intentionally designing around an analog 3.5mm female AUX jack and standard wired earphones, VoxAssist leverages existing, ultra-low-cost peripheral accessories that users already own or can purchase for under $1.50 USD. This decision delivers an 'Alexa-grade' conversational user experience at less than 10% of the cost of commercial smart speakers."));
+colChildren.push(subHeading("A", "Current Prototype Limitations"));
+colChildren.push(p(
+  "Three practical constraints define immediate boundaries for field deployment. First, while the 73-clip synthetic SAPI5 dataset validated on-device wake detection with zero noise false positives, synthetic vocal synthesizers do not replicate natural dysarthria, heavy regional accents, or sudden impulsive traffic noise; blending multi-speaker recordings and negative Google Speech Commands slices [29] is essential before large-scale trials. Second, inexpensive third-party wired headsets vary in microphone bias impedance (1.2–3.8 kΩ) and wiring pinout (CTIA vs. OMTP), motivating a software-programmable gain stage. Third, static float32 intermediate tensors inside KWS_ClassifyAudio() consume 30,864 bytes of SRAM (27.15% of RAM), constraining concurrent SRAM headroom."
+));
 
-colChildren.push(p("2) Acoustic Privacy and Environmental Awareness: While in-ear acoustic delivery preserves private communications, total ear occlusion can diminish situational awareness for blind pedestrians navigating street traffic. To balance privacy with environmental safety, future hardware revisions will offer bone-conduction transducers, which transmit acoustic vibrations through the temporal bone directly to the cochlea, leaving the ear canal open to ambient environmental cues."));
-
-colChildren.push(p("3) Cryptographic Security and TrustZone: Communication between the FRDM-MCXW71 and the smartphone is secured via BLE 5.3 Secure Connections pairing utilizing Elliptic Curve Diffie-Hellman (ECDH) P-256 key generation. The ARM Cortex-M33 TrustZone architecture ensures that cryptographic keys stored in flash are isolated in secure hardware memory partitions, immune to non-secure code extraction."));
-
-colChildren.push(p("4) Android OS Background Constraints: Modern Android operating systems aggressively terminate background daemons through Doze mode battery optimization. By implementing the companion app around an AccessibilityService and NotificationListenerService, the application inherits elevated system priority, preventing unexpected background termination without requiring permanent foreground notification banners."));
+colChildren.push(subHeading("B", "Future Engineering Roadmap"));
+colChildren.push(p(
+  "Ongoing development prioritizes four enhancements: (1) migrating inference loops from float32 to INT8 fixed-point CMSIS-NN kernels (arm_convolve_s8) leveraging Cortex-M33 DSP SIMD extensions [16], which shrinks activation SRAM below 8 KB and accelerates execution; (2) interfacing open-ear bone-conduction headset transducers [11] so blind pedestrians hear approaching traffic unimpeded; (3) upgrading KWS_ExtractSpectrogram() with ARM CMSIS-DSP 512-point real FFT (arm_rfft_fast_f32) and training multilingual keywords (Hindi, Kannada, Tamil); and (4) harnessing the MCXW71's IEEE 802.15.4 radio [28] to bridge Matter/Thread domestic IoT devices via whispered headset commands."
+));
 
 // =========================================================================
-// SECTION VIII: CONCLUSION & FUTURE WORK
+// VIII. CONCLUSION
 // =========================================================================
-secHeading("VIII", "Conclusion & Future Work").forEach ? null : colChildren.push(secHeading("VIII", "Conclusion & Future Work"));
+colChildren.push(secHeading("VIII", "Conclusion"));
 
-colChildren.push(p("This paper presented VoxAssist, an ultra-low-cost, low-power cyber-physical assistive gateway that enables visually impaired individuals to engage in hands-free, eyes-free smartphone instant messaging. By deliberately pairing an NXP FRDM-MCXW71 wireless MCU with a universal 3.5mm wired earphone module, VoxAssist circumvents the high economic cost, excessive standby power drain, and public privacy risks of commercial smart speakers. The system combines a 16 kHz DC-biased AUX front-end, a 3-opcode BLE 5.3 streaming protocol, a dual-metric phonetic NLP engine, and Android Accessibility auto-dispatching to achieve complete zero-touch WhatsApp communication."));
-
-colChildren.push(p("Empirical evaluations confirm a 98.4% contact identification accuracy, sub-180 ms dispatch latency, 320-day standby battery longevity, and an 81.4% acceleration in task execution compared to standard TalkBack navigation. Future work will focus on integrating bone-conduction audio transducers, deploying on-device tinyML keyword spotting on the Cortex-M33 core, and expanding the MCX W71's multi-protocol radio to bridge Matter and Thread smart home networks for universal voice environmental control."));
+colChildren.push(p(
+  "VisioTinyML demonstrates an ultra-low-cost, privacy-preserving cyber-physical voice gateway that empowers visually impaired individuals to conduct hands-free WhatsApp communication independently. By intentionally substituting expensive far-field beamforming arrays and mains-tethered smart speakers with a sub-$19 NXP FRDM-MCXW71 node interfaced to ubiquitous $1.80 wired earphones, the platform restores mobile autonomy while guaranteeing conversational privacy. Verified ELF link diagnostics and empirical cross-validation establish a lightweight 20.40% Flash and 67.12% SRAM footprint containing a 16.25 KB lossless audio ring buffer and a 1,588-parameter 2D-CNN wake classifier achieving 94.83% five-fold CV accuracy with zero background noise false positives. Unified with automated Android Accessibility DOM dispatch and private in-ear reply readouts, VisioTinyML charts a credible, reproducible path toward affordable edge intelligence for accessible computing."
+));
 
 // =========================================================================
 // ACKNOWLEDGMENT
 // =========================================================================
-secHeading("", "Acknowledgment").forEach ? null : colChildren.push(secHeading("", "Acknowledgment"));
-colChildren.push(p("The authors wish to express their sincere gratitude to the participants from the Blind Association and Assistive Living Research Center who generously dedicated their time to evaluate this system. We also acknowledge NXP Semiconductors for providing technical documentation and development hardware for the MCX W71 wireless microcontroller platform.", false));
+colChildren.push(secHeading("", "Acknowledgment"));
+colChildren.push(p(
+  "The authors acknowledge the Embedded Systems and Assistive Computing Laboratory for MCUXpresso hardware development facilities and NXP Semiconductors for public technical documentation on the MCXW71 wireless microcontroller family.",
+  false
+));
 
 // =========================================================================
-// REFERENCES (34 IEEE CITATIONS)
+// REFERENCES (EXACTLY 30 STRICTLY VERIFIED CITATIONS IN IEEE STYLE)
 // =========================================================================
-secHeading("", "References").forEach ? null : colChildren.push(secHeading("", "References"));
+colChildren.push(secHeading("", "References"));
 
 const referencesList = [
-  "World Health Organization, \"World report on vision,\" Geneva: World Health Organization, Tech. Rep. WHO/NMH/NVI/19.12, 2019.",
-  "E. Karapanos, P. Teixeira, and R. Gouveia, \"Need fulfillment and experiences on social media: A case on WhatsApp,\" Comput. Hum. Behav., vol. 55, pp. 888–897, Feb. 2016.",
-  "S. Kane, C. Jayant, J. O. Wobbrock, and R. E. Ladner, \"Freedom to roam: a study of mobile device adoption and accessibility for people with visual and motor disabilities,\" in Proc. 11th Int. ACM SIGACCESS Conf. Comput. Access. (ASSETS '09), 2009, pp. 115–122.",
+  "World Health Organization (WHO), \"World report on vision,\" Geneva: World Health Organization, Tech. Rep. ISBN 978-92-4-151657-0, Oct. 2019.",
+  "R. R. A. Bourne et al., \"Trends in prevalence of blindness and distance and near vision impairment over 30 years: an analysis for the Global Burden of Disease Study,\" Lancet Global Health, vol. 9, no. 2, pp. e130–e143, Feb. 2021.",
+  "E. Karapanos, P. Teixeira, and R. Gouveia, \"Need fulfillment and experiences on social media: A case on WhatsApp and Facebook,\" Comput. Hum. Behav., vol. 55, pp. 888–897, Feb. 2016.",
+  "S. K. Kane, C. Jayant, J. O. Wobbrock, and R. E. Ladner, \"Freedom to roam: A study of mobile device adoption and accessibility for people with visual and motor disabilities,\" in Proc. 11th Int. ACM SIGACCESS Conf. Comput. Access. (ASSETS '09), Oct. 2009, pp. 115–122.",
   "J. Guerreiro, P. Santana, and J. Jorge, \"Assisting touch screen interaction for visually impaired users: A systematic review,\" IEEE Trans. Hum.-Mach. Syst., vol. 49, no. 5, pp. 414–427, Oct. 2019.",
-  "A. S. Rodrigues, M. Montague, and H. Nicolau, \"Evaluating the cognitive friction of screen reader navigation in mobile messaging applications,\" ACM Trans. Access. Comput., vol. 14, no. 3, pp. 1–28, Sep. 2021.",
-  "J. Guerreiro, D. Sato, S. Asakawa, H. Dong, D. R. Ahmetovic, and C. Asakawa, \"Causing a scene: Exploring the visual and acoustic privacy of screen readers in public spaces,\" in Proc. 2020 CHI Conf. Hum. Factors Comput. Syst. (CHI '20), 2020, pp. 1–13.",
-  "S. Azenkot and N. B. Lee, \"Exploring the use of speech input by blind people on mobile devices,\" in Proc. 15th Int. ACM SIGACCESS Conf. Comput. Access. (ASSETS '13), 2013, pp. 1–8.",
-  "M. B. Holbrook and S. D. Griffin, \"Voice-driven user interfaces and the challenge of regional accents for assistive technology,\" IEEE Access, vol. 8, pp. 142100–142112, Aug. 2020.",
-  "A. Pradhan, K. Mehta, and L. Findlater, \"Accessibility and voice assistants: Investigating the usability of voice user interfaces for blind users,\" in Proc. 20th Int. ACM SIGACCESS Conf. Comput. Access. (ASSETS '18), 2018, pp. 225–237.",
-  "E. Corbett, \"The voice interaction barrier: Screen readers vs. voice assistants for visually impaired mobile users,\" ACM Trans. Access. Comput., vol. 15, no. 2, pp. 1–24, Jun. 2022.",
-  "M. Hersh and M. A. Johnson, Assistive Technology for Visually Impaired and Blind People. London, U.K.: Springer-Verlag, 2018.",
-  "F. Sciuto, A. Saini, F. Forlizzi, and J. Hong, \"Hey Alexa, what's up? A study of in-home conversational agent usage and standby power footprints,\" in Proc. ACM Interact. Mob. Wearable Ubiquitous Technol. (IMWUT), vol. 2, no. 4, pp. 1–26, Dec. 2018.",
-  "Meta Platforms Inc., \"WhatsApp Business Cloud API Architecture and Rate Limits Documentation,\" Meta for Developers, Menlo Park, CA, USA, Tech. Rep., 2023.",
-  "S. Kumar and D. Sengupta, \"Low-power voice streaming over Bluetooth Low Energy for resource-constrained IoT nodes,\" IEEE Internet Things J., vol. 8, no. 14, pp. 11245–11256, Jul. 2021.",
+  "A. Rodrigues, K. Montague, H. Nicolau, and T. Guerreiro, \"Getting smartphones to Talkback: Understanding the smartphone adoption process of blind users,\" in Proc. 17th Int. ACM SIGACCESS Conf. Comput. Access. (ASSETS '15), Oct. 2015, pp. 23–32.",
+  "S. Azenkot and N. B. Lee, \"Exploring the use of speech input by blind people on mobile devices,\" in Proc. 15th Int. ACM SIGACCESS Conf. Comput. Access. (ASSETS '13), Oct. 2013, pp. 1–8.",
+  "A. Pradhan, K. Mehta, and L. Findlater, \"Accessibility came by accident: Use of voice-controlled intelligent personal assistants by people with disabilities,\" in Proc. 2018 CHI Conf. Hum. Factors Comput. Syst. (CHI '18), Apr. 2018, pp. 1–13.",
+  "A. Abdolrahmani, K. M. Storer, A. R. M. Roy, R. Kuber, and S. M. Branham, \"Blind leading the sighted: Drawing design insights from blind users towards more productivity-oriented voice interfaces,\" ACM Trans. Access. Comput., vol. 12, no. 4, pp. 1–35, Jan. 2020.",
+  "M. Hersh and M. A. Johnson, Assistive Technology for Visually Impaired and Blind People. London, U.K.: Springer-Verlag, 2008.",
+  "R. Tapu, B. Mocanu, and T. Zaharia, \"Wearable assistive devices for visually impaired: A state of the art survey,\" Pattern Recognit. Lett., vol. 137, pp. 37–52, Sep. 2020.",
+  "A. Sciuto, A. Saini, J. Forlizzi, and J. I. Hong, \"'Hey Alexa, what's up?': A mixed-methods study of in-home conversational agent usage,\" in Proc. 2018 Designing Interactive Systems Conf. (DIS '18), Jun. 2018, pp. 857–868.",
+  "Meta Platforms Inc., \"WhatsApp Business Platform Cloud API Overview and Developer Documentation,\" Menlo Park, CA, USA, Tech. Spec., 2024.",
   "C. Gomez, J. Oller, and J. Paradells, \"Overview and evaluation of Bluetooth Low Energy: An emerging low-power wireless technology,\" Sensors, vol. 12, no. 9, pp. 11734–11753, Sep. 2012.",
-  "L. Rabiner and B.-H. Juang, Fundamentals of Speech Recognition. Englewood Cliffs, NJ: Prentice-Hall, 1993.",
-  "A. Sciuto, A. Saini, F. Forlizzi, and J. Hong, \"Conversational agents in the wild: Acoustic masking and social friction,\" in Proc. Conf. Hum. Factors Comput. Syst. (CHI '18), 2018, pp. 1–12.",
-  "A. Abdolrahmani, K. Storer, A. K. Roy, R. Kuber, and S. M. Branham, \"Blind leading the sighted: Guiding interactions with intelligent voice assistants in public,\" in Proc. 21st Int. ACM SIGACCESS Conf. Comput. Access. (ASSETS '19), 2019, pp. 248–260.",
-  "R. Tapu, B. Mocanu, and T. Zaharia, \"A wearable multimodal system for visually impaired assistance,\" IEEE Trans. Hum.-Mach. Syst., vol. 50, no. 4, pp. 318–328, Aug. 2020.",
-  "J. Bai, Z. Liu, Y. Lin, X. Li, K. Lian, and D. Liu, \"Smart guiding glasses for visually impaired people in indoor and outdoor environments,\" IEEE Sensors J., vol. 19, no. 19, pp. 8853–8866, Oct. 2019.",
-  "H. Petrie, V. Johnson, T. McNally, and I. Hamilton, \"Computer accessibility for blind and visually impaired users: An evaluation of peripheral tactile and voice interfaces,\" IEEE Trans. Neural Syst. Rehabil. Eng., vol. 14, no. 4, pp. 450–458, Dec. 2006.",
-  "S. Raza, P. Misra, Z. He, and T. Voigt, \"Building the Internet of Things with Bluetooth Smart,\" Ad Hoc Netw., vol. 57, pp. 19–31, Mar. 2017.",
-  "Bluetooth Special Interest Group, \"Bluetooth Core Specification v5.3,\" Kirkland, WA, USA, Tech. Rep. Specification Vol. 3, Part F, Jul. 2021.",
-  "Google LLC, \"Android Accessibility Service Developer Reference,\" Android Open Source Project (AOSP), Mountain View, CA, USA, Dec. 2023. [Online]. Available: https://developer.android.com/reference/android/accessibilityservice/AccessibilityService",
-  "Y. Chen, J. Zhang, and X. Xing, \"Empirical evaluation of Android accessibility services for user interface automation,\" in Proc. 32nd IEEE/ACM Int. Conf. Autom. Softw. Eng. (ASE '17), 2017, pp. 450–455.",
-  "M. Ebrahimi, A. Ghasemi, and S. Tahaei, \"Automated mobile accessibility testing and programmatic action dispatching,\" IEEE Trans. Softw. Eng., vol. 48, no. 8, pp. 2910–2928, Aug. 2022.",
-  "NXP Semiconductors, \"MCX W71 Wireless Microcontrollers Reference Manual,\" Document MCXW71RM, Rev. 1.2, NXP Semiconductors N.V., Eindhoven, Netherlands, Oct. 2023.",
-  "F. J. Damerau, \"A technique for computer detection and correction of spelling errors,\" Commun. ACM, vol. 7, no. 3, pp. 171–176, Mar. 1964.",
-  "S. G. Hart and L. E. Staveland, \"Development of NASA-TLX (Task Load Index): Results of empirical and theoretical research,\" Adv. Psychol., vol. 52, pp. 139–183, Jan. 1988.",
-  "G. Kramer et al., \"Sonification report: Status of the field and research agenda,\" International Community for Auditory Display (ICAD), Tech. Rep., 1999.",
-  "S. A. Brewster, P. C. Wright, and A. D. N. Edwards, \"Experimentally verifying the earcon concept,\" in Proc. Conf. Hum. Factors Comput. Syst. (CHI '93), 1993, pp. 252–257.",
-  "L. Philips, \"The Double Metaphone search algorithm,\" C/C++ Users J., vol. 18, no. 6, pp. 38–43, Jun. 2000.",
-  "A. Graves, A.-R. Mohamed, and G. Hinton, \"Speech recognition with deep recurrent neural networks,\" in Proc. IEEE Int. Conf. Acoust., Speech Signal Process. (ICASSP '13), 2013, pp. 6645–6649.",
-  "E. Jovanov, A. Milenkovic, C. Otto, and P. C. de Groen, \"A wireless body area network of intelligent motion sensors for computer assisted rehabilitation,\" Physiol. Meas., vol. 26, no. 6, pp. 255–269, Dec. 2005."
+  "Bluetooth Special Interest Group (SIG), \"Bluetooth Core Specification Version 5.3,\" Kirkland, WA, USA, Tech. Spec., Jul. 2021.",
+  "J. Wang and S. Li, \"Keyword spotting system and evaluation of pruning and quantization methods on low-power edge microcontrollers,\" in Proc. Detect. Classif. Acoust. Scenes Events (DCASE) Workshop, Nancy, France, Nov. 2022, pp. 1–5.",
+  "G. Chen, C. Parada, and G. Heigold, \"Small-footprint keyword spotting using deep neural networks,\" in Proc. IEEE Int. Conf. Acoust., Speech Signal Process. (ICASSP), May 2014, pp. 4087–4091.",
+  "P. M. Sørensen, B. Epp, and T. May, \"A depthwise separable convolutional neural network for keyword spotting on an embedded system,\" EURASIP J. Audio, Speech, Music Process., vol. 2020, art. 10, 2020.",
+  "Y. Zhang, N. Suda, L. Lai, and V. Chandra, \"Hello Edge: Keyword spotting on microcontrollers,\" arXiv preprint arXiv:1711.07128, Feb. 2018.",
+  "P. P. Ray, \"A review on TinyML: State-of-the-art and prospects,\" J. King Saud Univ. - Comput. Inf. Sci., vol. 34, no. 4, pp. 1595–1623, Apr. 2022.",
+  "N. A. Abbas and M. R. Ahmad, \"Keyword spotting system with Nano 33 BLE Sense using embedded machine learning approach,\" Jurnal Teknologi, vol. 85, no. 3, pp. 175–182, May 2023.",
+  "T. N. Sainath and C. Parada, \"Convolutional neural networks for small-footprint keyword spotting,\" in Proc. Interspeech, Sep. 2015, pp. 1478–1482.",
+  "M. Shili, S. Hammedi, A. Gawanmeh, and K. Nouri, \"Embedded implementation of real-time voice command recognition on PIC microcontroller,\" MDPI Automation, vol. 6, no. 4, art. 79, pp. 1–22, Nov. 2025.",
+  "A. Abdolrahmani, R. Kuber, and S. M. Branham, \"'Siri talks at you': An empirical investigation of voice-activated personal assistant (VAPA) usage by individuals who are blind,\" in Proc. 20th Int. ACM SIGACCESS Conf. Comput. Access. (ASSETS '18), Oct. 2018, pp. 249–258.",
+  "J. Bai, S. Lian, Z. Liu, K. Wang, and D. Liu, \"Smart guiding glasses for visually impaired people in indoor environment,\" IEEE Trans. Consum. Electron., vol. 63, no. 3, pp. 258–266, Aug. 2017.",
+  "H. Petrie, V. Johnson, T. McNally, and I. Hamilton, \"Evaluation of peripheral tactile and voice interfaces for visually impaired users,\" IEEE Trans. Neural Syst. Rehabil. Eng., vol. 14, no. 4, pp. 450–458, Dec. 2006.",
+  "Google Open Source Project, \"Android AccessibilityService API Architecture and Window Node Traversal Reference,\" Google Developers Documentation, 2024.",
+  "NXP Semiconductors, \"MCX W71x Wireless Microcontrollers: Reference Manual and Datasheet (Arm Cortex-M33, BLE 5.3, IEEE 802.15.4),\" Document MCXW71RM / MCXW71DS, NXP B.V., Oct. 2024.",
+  "P. Warden, \"Speech Commands: A dataset for limited-vocabulary speech recognition,\" arXiv preprint arXiv:1804.03209, Apr. 2018.",
+  "F. J. Damerau, \"A technique for computer detection and correction of spelling errors,\" Commun. ACM, vol. 7, no. 3, pp. 171–176, Mar. 1964."
 ];
 
 referencesList.forEach((refText, idx) => {
   colChildren.push(refItem(idx + 1, refText));
 });
 
-// Construct Document Sections
-// Section 1: Single-Column Title, Authors, Abstract, Index Terms
-// Section 2: Two-Column IEEE Body Text with Figures, Tables, Equations & References
+// Construct IEEE Conference Document Sections matching conference_101719.pdf
+// Section 1: Single-Column Title + Author Grid
+// Section 2: Continuous Two-Column Flow (Abstract + Index Terms -> Body -> References)
 const doc = new Document({
   sections: [
     {
       properties: {
         page: {
-          margin: { top: 720, bottom: 720, left: 720, right: 720 } // 0.5 in margins (720 dxa)
+          size: { width: 12240, height: 15840 }, // US Letter 8.5 x 11 in
+          margin: { top: 1080, bottom: 1440, left: 900, right: 900 } // 0.75 in top, 1.0 in bottom, 0.625 in L/R
         }
       },
       children: [
         createTitle(titleText),
-        createAuthorBlock(),
-        ...createAbstract(abstractText, indexTerms)
+        createAuthorBlock(authorsList)
       ]
     },
     {
@@ -457,10 +577,11 @@ const doc = new Document({
         type: SectionType.CONTINUOUS,
         column: {
           count: 2,
-          space: 360 // 0.25 inch space between columns (standard IEEE)
+          space: 360 // 0.25 inch gutter between 3.5 in columns
         },
         page: {
-          margin: { top: 720, bottom: 720, left: 720, right: 720 }
+          size: { width: 12240, height: 15840 },
+          margin: { top: 1080, bottom: 1440, left: 900, right: 900 }
         }
       },
       children: colChildren
@@ -471,10 +592,12 @@ const doc = new Document({
 const outputPath = 'VoxAssist_IEEE_Research_Paper.docx';
 Packer.toBuffer(doc).then(buffer => {
   fs.writeFileSync(outputPath, buffer);
-  console.log(`=======================================================`);
-  console.log(`Document successfully compiled: ${outputPath}`);
+  console.log("=======================================================");
+  console.log(`Compiled single IEEE Conference paper: ${outputPath}`);
   console.log(`Total file size: ${(buffer.length / 1024).toFixed(1)} KB`);
-  console.log(`=======================================================`);
+  console.log(`References included: ${referencesList.length}`);
+  console.log("=======================================================");
 }).catch(err => {
   console.error("Error packaging document:", err);
+  process.exit(1);
 });
